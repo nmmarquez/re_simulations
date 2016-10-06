@@ -1,8 +1,15 @@
 rm(list=ls())
-set.seed(123)
+set.seed(124)
 library(gee)
 library(lme4)
 library(mvtnorm)
+library(ggplot2)
+
+options(lmerControl=list(check.nobs.vs.rankZ = "warning",
+                         check.nobs.vs.nlev = "warning",
+                         check.nobs.vs.nRE = "warning",
+                         check.nlev.gtreq.5 = "warning",
+                         check.nlev.gtr.1 = "warning"))
 
 # function for generating an AR1 precision and or var-covar matrix
 ar1_matrix <- function(N, rho, sigma, vcov=FALSE){
@@ -44,43 +51,75 @@ b1 <- -3
 y <- b0 + b1 * x1 + site_eff + rnorm(N, sd=.2)
 
 # put data into data frame for gee
-df <- data.frame(y, x1, location=site_number_sample)
-df <- df[order(df$location),]
+data <- data.frame(y, x1, location=site_number_sample)
+data <- data[order(data$location),]
 
 # summaries of each model type
-
-run_model <- function(iterations=200, res="unstructured"){
-    sample_sizes <- seq(0, N , N/iterations)
-    var <- 
-    # make sure samples are greater than 20
-    sample_sizes <- sample_sizes[sample_sizes >= 20]
-    samples <- lapply(sample_sizes, function(x) sample(1:N, size=x))
-    m1 <- t(sapply(samples, function(x) lm(y ~ x1, data=df[x,])$coefficients))
-    m2 <- t(sapply(samples, function(x)
-        lmer(y ~ x1 + (1|location), data=df[x,])@beta))
-    m3 <- t(sapply(samples, function(x)
-        gee(y ~ x1, id=location, data=df[x,], corstr=res)$coefficients))
-    return(None)
+get_betas <- function(model){
+    if(isS4(model)){
+        b <- model@beta
+    }
+    else{
+        b <- model$coefficients
+    }
+    b
 }
-pop_samp <- sample(1:N, site_number)
-m1 <- lm(y ~ x1)
-m2 <- lmer(y ~ x1 + (1|location), data=df)
-m3 <- gee(y ~ x1, id=location, data=df, corstr="unstructured")
+
+run_model <- function(fun=c(lm, lmer, gee), df=data,
+                      ff=c("y ~ x1", "y ~ x1 + (1|location)", "y ~ x1"),
+                      model_names=c("lm", "lmer", "gee"),
+                      iterations=1000, res="unstructured"){
+    sample_sizes <- as.integer(seq(0, N , N/iterations))
+    # make sure samples are greater than 10
+    location <- df$location
+    sample_sizes <- sample_sizes[sample_sizes >= 10]
+    samples <- lapply(sample_sizes, function(x) sample(1:N, size=x))
+    M <- length(fun)
+    models <- lapply(1:M, function(x) t(sapply(samples, function(y)
+        get_betas(fun[[x]](ff[[x]], id=location, data=df[y,], corstr=res)))))
+    betas <- paste0("beta", 0:(ncol(models[[1]]) - 1))
+    results <- data.frame(do.call(rbind, models))
+    names(results) <- betas
+    results$sample_size <- rep(sample_sizes, M)
+    results$model <- rep(model_names, each=length(sample_sizes))
+    results
+}
+
+beta_results <- run_model()
+
+# blackline is the true value
+ggplot(data = beta_results, aes(x=sample_size, y=beta0, colour=model)) +       
+    geom_line() + geom_abline(aes(slope=0, intercept=b0)) +
+    ggtitle("B0 estimates for Correct Residual Var Structure of LMER")
+ggplot(data = beta_results, aes(x=sample_size, y=beta1, colour=model)) +       
+    geom_line() + geom_abline(aes(slope=0, intercept=b1)) + 
+    ggtitle("B1 estimates for Correct Residual Var Structure of LMER")
 
 # now use the wrong covariance structure in the random effects model
 ar1_rho <- .99
 ar1_sigma <- .1
 ar1_re_eff <- sim_ar1(site_number, ar1_rho, ar1_sigma)
-plot(1:site_number, ar1_re_eff)
+qplot(1:site_number, ar1_re_eff, main="AR1 Correlation Over Time")
 ar1_site_eff <- ar1_re_eff[site_number_sample]
-b3 <- 1.5
+b2 <- 1.5
 
 # generate the response variables
-y2 <- b0 + b1 * x1 + b3 * site_number_sample + ar1_site_eff + rnorm(N, sd=.2)
-df2 <- data.frame(y, y2, x1, location=site_number_sample)
-df2 <- df2[order(df2$location),]
+y2 <- b0 + b1 * x1 + b2 * site_number_sample + ar1_site_eff + rnorm(N, sd=.2)
+data2 <- data.frame(y, y2, x1, location=site_number_sample)
+data2 <- data2[order(data2$location),]
+
+beta_results2 <- run_model(df=data2,
+                          ff=c("y2 ~ x1 + location", 
+                               "y2 ~ x1 + location + (1|location)", 
+                               "y2 ~ x1 + location"))
 
 # summaries of each model type
-summary(lm(y2 ~ x1 + location, data=df2[pop_samp,]))
-summary(lmer(y2 ~ x1 + location + (1|location), data=df2[pop_samp,]))
-summary(gee(y2 ~ x1 + location, id=location, data=df2, subset=pop_samp))
+ggplot(data = beta_results2, aes(x=sample_size, y=beta0, colour=model)) +       
+    geom_line() + geom_abline(aes(slope=0, intercept=b0)) +
+    ggtitle("B0 estimates for Incorrect Residual Var Structure of LMER")
+ggplot(data = beta_results2, aes(x=sample_size, y=beta1, colour=model)) +       
+    geom_line() + geom_abline(aes(slope=0, intercept=b1)) + 
+    ggtitle("B1 estimates for Incorrect Residual Var Structure of LMER")
+ggplot(data = beta_results2, aes(x=sample_size, y=beta2, colour=model)) +       
+    geom_line() + geom_abline(aes(slope=0, intercept=b2)) + 
+    ggtitle("B2 estimates for Incorrect Residual Var Structure of LMER")
