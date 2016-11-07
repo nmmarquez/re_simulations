@@ -34,6 +34,37 @@ sim_ar1 <- function(N, rho, sigma){
     as.vector(rmvnorm(1, mean=rep(0, N), sigma=vcov_mat))
 }
 
+# summaries of each model type
+get_betas <- function(model){
+    if(isS4(model)){
+        b <- model@beta
+    }
+    else{
+        b <- model$coefficients
+    }
+    b
+}
+
+run_model <- function(fun=c(lm, lmer, gee), df=data,
+                      ff=c("y ~ x1", "y ~ x1 + (1|location)", "y ~ x1"),
+                      model_names=c("lm", "lmer", "gee"),
+                      iterations=100, res="unstructured"){
+    sample_sizes <- as.integer(seq(0, N , N/iterations))
+    # make sure samples are greater than 10
+    location <- df$location
+    sample_sizes <- sample_sizes[sample_sizes >= 10]
+    samples <- lapply(sample_sizes, function(x) sample(1:N, size=x))
+    M <- length(fun)
+    models <- lapply(1:M, function(x) t(sapply(samples, function(y)
+        get_betas(fun[[x]](ff[[x]], id=location, data=df[y,], corstr=res)))))
+    betas <- paste0("beta", 0:(ncol(models[[1]]) - 1))
+    results <- data.frame(do.call(rbind, models))
+    names(results) <- betas
+    results$sample_size <- rep(sample_sizes, M)
+    results$model <- rep(model_names, each=length(sample_sizes))
+    results
+}
+
 # sim data with known residual structure 
 N <- 1000
 site_number <- 100
@@ -54,36 +85,6 @@ y <- b0 + b1 * x1 + site_eff + rnorm(N, sd=.2)
 data <- data.frame(y, x1, location=site_number_sample)
 data <- data[order(data$location),]
 
-# summaries of each model type
-get_betas <- function(model){
-    if(isS4(model)){
-        b <- model@beta
-    }
-    else{
-        b <- model$coefficients
-    }
-    b
-}
-
-run_model <- function(fun=c(lm, lmer, gee), df=data,
-                      ff=c("y ~ x1", "y ~ x1 + (1|location)", "y ~ x1"),
-                      model_names=c("lm", "lmer", "gee"),
-                      iterations=1000, res="unstructured"){
-    sample_sizes <- as.integer(seq(0, N , N/iterations))
-    # make sure samples are greater than 10
-    location <- df$location
-    sample_sizes <- sample_sizes[sample_sizes >= 10]
-    samples <- lapply(sample_sizes, function(x) sample(1:N, size=x))
-    M <- length(fun)
-    models <- lapply(1:M, function(x) t(sapply(samples, function(y)
-        get_betas(fun[[x]](ff[[x]], id=location, data=df[y,], corstr=res)))))
-    betas <- paste0("beta", 0:(ncol(models[[1]]) - 1))
-    results <- data.frame(do.call(rbind, models))
-    names(results) <- betas
-    results$sample_size <- rep(sample_sizes, M)
-    results$model <- rep(model_names, each=length(sample_sizes))
-    results
-}
 
 beta_results <- run_model()
 
