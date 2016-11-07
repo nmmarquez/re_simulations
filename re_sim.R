@@ -1,3 +1,4 @@
+# comparison of using probability(p) vs 1 - p in logistic model
 rm(list=ls())
 
 # probability of dying of diptheria

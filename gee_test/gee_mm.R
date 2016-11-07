@@ -1,3 +1,5 @@
+### model to comapre different methods of modeling correlated residuals
+### generalized estimating equations and mixed effects models
 rm(list=ls())
 set.seed(124)
 library(gee)
@@ -66,7 +68,7 @@ run_model <- function(fun=c(lm, lmer, gee), df=data,
 }
 
 # sim data with known residual structure 
-N <- 1000
+N <- 100
 site_number <- 100
 re_sigma <- 2
 re_eff <- rnorm(site_number, sd=re_sigma)

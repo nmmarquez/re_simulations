@@ -1,3 +1,4 @@
+# example of pooling variance estimates for various bimodal distributions
 rm(list=ls())
 set.seed(123)
 library(ggplot2)

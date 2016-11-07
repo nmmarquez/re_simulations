@@ -2,6 +2,7 @@ set.seed(123)
 rm(list=ls())
 library(splines)
 
+# baseline data
 time <-  seq(0.02, 10, .02)
 y <- sin(time) + rnorm(length(time), sd=.2)
 plot(time, y)
