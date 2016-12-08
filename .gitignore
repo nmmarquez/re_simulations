@@ -3,4 +3,5 @@
 .idea/
 *.so
 *.o
-
+*.Rhistory
+*.RData
