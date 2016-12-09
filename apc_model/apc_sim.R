@@ -28,11 +28,16 @@ year_rate_ratio <- year_rate_ratio / year_rate_ratio[12]
 # rate ratio by cohort setting the 15 cohort as the reference
 cohorts <- 1920:1975
 C <- length(cohorts)
-cohort_ratio <- .0022 * (1:C - 15)**2 + .0022 * 1:C + correlated_error(C, .05) + 1
+
+cohort_ratio <- (.0022 * (1:C - 15)**2 + .0022 * 1:C + 
+                     correlated_error(C, .05) + 1)
 cohort_ratio <- cohort_ratio / cohort_ratio[15]
 plot(cohorts, cohort_ratio, type="l", xlim=c(min(cohorts), max(years)), 
-     ylim=c(min(year_rate_ratio), max(cohort_ratio)))
+     ylim=c(min(year_rate_ratio), max(cohort_ratio)), ylab="rate ratio", 
+     xlab="year")
 lines(years, year_rate_ratio, col=2)
+legend("topright", legend=c("Cohort","Period"), lty=c(1,1), 
+       lwd=c(.5,.5), col=c("black","red"))
 
 # make sure ratios are above zero
 all(c(cohort_ratio > 0, year_rate_ratio > 0))
@@ -57,6 +62,10 @@ for(variable in c("age", "year", "cohort")){
     df[,variable] <- as.factor(as.integer(df[,variable]))
 }
 
+# change the ref group
+df <- within(df, year <- relevel(year, ref = 12))
+df <- within(df, cohort <- relevel(cohort, ref = 15))
+
 # run the model with all paramters
 glm1 <- glm(death_count ~ age + year + cohort, data=df, family=poisson)
 # the model does not converge because of classical APC model identifiebility
@@ -72,5 +81,5 @@ summary(glm2)
 
 # To do
 # 1) extract the model age mort rates and compare them to actual mort rates
-# 2) do the same for year and cohort rate ratios (need to change ref group)
+# 2) do the same for year and cohort rate ratios
 # 3) change the true values to have parallel decreasing cohort and year effects
