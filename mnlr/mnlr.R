@@ -47,9 +47,9 @@ setwd("~/Documents/tmp/mnlr/")
 
 # compile the cpp
 model_name <- "mnlr"
-#if (file.exists(paste0(model_name, ".so"))) file.remove(paste0(model_name, ".so"))
-#if (file.exists(paste0(model_name, ".o"))) file.remove(paste0(model_name, ".o"))
-#if (file.exists(paste0(model_name, ".dll"))) file.remove(paste0(model_name, ".dll"))
+if (file.exists(paste0(model_name, ".so"))) file.remove(paste0(model_name, ".so"))
+if (file.exists(paste0(model_name, ".o"))) file.remove(paste0(model_name, ".o"))
+if (file.exists(paste0(model_name, ".dll"))) file.remove(paste0(model_name, ".dll"))
 compile(paste0(model_name, ".cpp"))
 
 # load the model
@@ -66,9 +66,11 @@ Obj$env$inner.control$trace <- FALSE
 Obj$env$silent <- TRUE
 print("Run time of TMB model for multinomial log-linear regression...")
 system.time(Opt <- nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr))
+Opt$convergence
 
 # check out the betas actually a bit better than the nnet implementation
 # although a lot slower
 Report <- Obj$report()
 print("rmse of betas when using TMB")
 mean((betas - Report$betas)**2)
+

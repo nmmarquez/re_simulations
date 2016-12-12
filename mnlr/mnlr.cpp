@@ -45,16 +45,20 @@ Type objective_function<Type>::operator() ()
     
     // calculate the likelihood
     Type nll = 0.;
+    vector<Type> ind_prob(G);
+    vector<int> obs_val(G);
     
     for(int i=0; i < N; i++){
-        for(int g=1; g < G; g++){
+        for(int g=0; g < G; g++){
+            ind_prob[g] = prob(i,g);
             if (group[i] == g){
-                nll -= dbinom(Type(1.), Type(1.), prob(i,g), true);
+                obs_val[g] = int(1);
             }
             else{
-                nll -= dbinom(Type(0.), Type(1.), prob(i,g), true);  
+                obs_val[g] = int(0);  
             }
         }
+        nll -= dmultinom(obs_val, ind_prob, true);
     }
     
     REPORT(prob);
