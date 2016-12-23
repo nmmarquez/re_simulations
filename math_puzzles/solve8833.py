@@ -1,8 +1,5 @@
 import itertools as it
-import pandas as pd
-
-
-num_sets = {"": [8., 8., 3., 3.]}
+import math
 
 
 def custom_math(pair, func):
@@ -49,19 +46,30 @@ def cycle_num_set(num_set):
     return new_num_set
 
 
-def cycle8833():
+def cycle_set(array_like):
     """
-    Get all possible combinations from combining 8, 8, and 3
+    Get all possible combinations from combining a set of numbers
     """
-    num_set  = {"": [8., 8., 3., 3.]}
-    for i in range(3):
+    num_set  = {"": [float(x) for x in array_like]}
+    for i in range(len(num_set[""]) - 1):
         num_set = cycle_num_set(num_set)
     datur = {k: num_set[k][0] for k in num_set.keys()}
-    return pd.DataFrame({"ops": list(datur.keys()), "val": list(datur.values())})
+    return datur
+
+
+def print_target_match(array_like, target, **args):
+    datur = cycle_set(array_like)
+    for k in datur.keys():
+        if math.isclose(datur[k], target, **args):
+            print(k)
+            return
+    print("No Results Found")
 
 
 if __name__ == "__main__":
-    df = cycle8833()
-    print (df.query("val >= 23.99 & val <= 24.01")["ops"].values[0])
-
-
+    import argparse
+    parser = argparse.ArgumentParser(description="Simple Math Puzzle Solver")
+    parser.add_argument("-l", "--list", nargs="+", type=int)
+    parser.add_argument("-v", "--value", type=float)
+    args = parser.parse_args()
+    print_target_match(args.list, args.value)
