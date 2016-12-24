@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 import itertools as it
-import math
+
+
+def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
 def custom_math(pair, func):
@@ -61,7 +64,7 @@ def cycle_set(array_like):
 def print_target_match(array_like, target, **args):
     datur = cycle_set(array_like)
     for k in datur.keys():
-        if math.isclose(datur[k], target, **args):
+        if isclose(datur[k], target, **args):
             print(k)
             return
     print("No Results Found")
