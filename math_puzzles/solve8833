@@ -73,7 +73,9 @@ def print_target_match(array_like, target, **args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Simple Math Puzzle Solver")
-    parser.add_argument("-l", "--list", nargs="+", type=int)
-    parser.add_argument("-v", "--value", type=float)
+    parser.add_argument("-l", "--list", nargs="+", type=int, required=True,
+                        help="List of integers to manipulate.")
+    parser.add_argument("-v", "--value", type=float, required=True,
+                        help="Target value to achieve from integer list.")
     args = parser.parse_args()
     print_target_match(args.list, args.value)
