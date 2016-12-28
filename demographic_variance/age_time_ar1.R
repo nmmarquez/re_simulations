@@ -81,7 +81,7 @@ df_forecast <- as.data.table(expand.grid(year_id=forecasting_time_points,
 sim_draws <- do.call(rbind, lapply(rw_df$sigma.rw, function(x)
     RW_draws(draws, length(forecasting_time_points), x, length(time_points)))) + 
     df_forecast$year_id * lm1$coefficients[2] + lm1$coefficients[1] + 
-    df_forecast$age_group_id + lm1$coefficients[3]
+    df_forecast$age_group_id * lm1$coefficients[3]
 
 # how about this in data table???
 new_cols <- paste0("draw", 1:draws)
@@ -131,8 +131,8 @@ Qf <- kronecker(Q_af, Q_tf, make.dimnames=TRUE) # joint precision matrix
 
 
 # observe values which have correlated error
-true_process <- B0 + B_time * df_forecast$year_id + 
-    B_age * df_forecast$age_group_id + 
+true_process <- lm1$coefficients[1] + lm1$coefficients[2] * df_forecast$year_id + 
+    lm1$coefficients[3] * df_forecast$age_group_id + 
     t(rmvnorm(draws, sigma=solve(Qf)))
 
 df_true <- as.data.table(expand.grid(year_id=forecasting_time_points, 
@@ -142,8 +142,8 @@ for(k in 1:length(new_cols)){
     df_true[,(new_cols[k]):=true_process[,k],]
 }
 
-df_true$ref <- B0 + B_time * df_forecast$year_id + 
-    B_age * df_forecast$age_group_id
+df_true$ref <- lm1$coefficients[1] + lm1$coefficients[2] * df_forecast$year_id + 
+  lm1$coefficients[3] * df_forecast$age_group_id
 
 df_adj <- subset(df_true, year_id == 2015)
 for(k in 1:length(new_cols)){
@@ -188,3 +188,5 @@ dfft[year_id < 2015, y_upper:=y_pred,]
 
 ggplot(dfft, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
     geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
+ggplot(dff, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
+  geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
