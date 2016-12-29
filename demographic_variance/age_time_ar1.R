@@ -89,8 +89,7 @@ df_forecast <- cbind(df_forecast, sim_draws)
 
 
 # how do I do this in data table?
-df_forecast[,y_hat:=rowMeans(.SD), .SDcols=new_cols]
-df_forecast$y_pred <- apply(sim_draws, 1, mean)
+df_forecast[,y_pred:=rowMeans(.SD), .SDcols=new_cols]
 df_forecast$y_lower <- apply(sim_draws, 1, quantile, .025)
 df_forecast$y_upper <- apply(sim_draws, 1, quantile, .975)
 
