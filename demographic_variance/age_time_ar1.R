@@ -68,11 +68,11 @@ summary(lm1)
 
 # lets forecast now with a RW on the residuals independent for each age
 df$res <- lm1$res
+df$y_hat <- lm1$fitted.values
 df[, lag.res:=c(NA, res[-.N]), by=age_group_id]
 df[, delta.res:=res - lag.res]
 
-rw_df <- subset(df, year_id != 1990)[,list(sigma.rw=sd(delta.res)),
-                                      by=age_group_id]
+rw_df <- df[,list(sigma.rw=sd(delta.res, na.rm=TRUE)), by=age_group_id]
 
 draws <- 1000
 df_forecast <- as.data.table(expand.grid(year_id=forecasting_time_points, 
@@ -82,14 +82,14 @@ sim_draws <- do.call(rbind, lapply(rw_df$sigma.rw, function(x)
     RW_draws(draws, length(forecasting_time_points), x, length(time_points)))) + 
     df_forecast$year_id * lm1$coefficients[2] + lm1$coefficients[1] + 
     df_forecast$age_group_id * lm1$coefficients[3]
-
-# how about this in data table???
 new_cols <- paste0("draw", 1:draws)
-for(k in 1:length(new_cols)){
-    df_forecast[,(new_cols[k]):=sim_draws[,k],]
-}
+dimnames(sim_draws) <- list(NULL, new_cols)
+
+df_forecast <- cbind(df_forecast, sim_draws)
+
 
 # how do I do this in data table?
+df_forecast[,y_hat:=rowMeans(.SD), .SDcols=new_cols]
 df_forecast$y_pred <- apply(sim_draws, 1, mean)
 df_forecast$y_lower <- apply(sim_draws, 1, quantile, .025)
 df_forecast$y_upper <- apply(sim_draws, 1, quantile, .975)
@@ -190,3 +190,5 @@ ggplot(dfft, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
     geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
 ggplot(dff, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
   geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
+
+
