@@ -62,13 +62,14 @@ A_ <- length(age_group_id)
 T_ <- length(forecasting_time_points)
 train_years <- length(time_points)
 
-rho_time <- .99 # correlation over time
+rho_time <- .98 # correlation over time
 rho_age <- .95 # correlation over age
-sigma_Q <- 1
+sigma_age <- 1
+sigma_time <- 1
 
-Q_age <- Q_ar1(length(age_group_id), sigma_Q, rho_age) # precision matrix for age
+Q_age <- Q_ar1(length(age_group_id), sigma_age, rho_age) # precision matrix for age
 dimnames(Q_age) <- list(age_group_id, age_group_id)
-Q_time <- Q_ar1(length(time_points), sigma_Q, rho_time) # precision matrix for time
+Q_time <- Q_ar1(length(time_points), sigma_time, rho_time) # precision matrix for time
 dimnames(Q_time) <- list(time_points, time_points)
 
 Q <- kronecker(Q_age, Q_time, make.dimnames=TRUE) # joint precision matrix

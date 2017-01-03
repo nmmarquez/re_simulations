@@ -29,6 +29,23 @@ RW_draws <- function(draws, N, sigma, burn_in=1){
     sapply(1:draws, function(x) RW(N, sigma, burn_in))
 }
 
+time_plot <- function(df, title=""){
+    p <- ggplot(df, aes(year_id, y_obs, group=age_group_id, 
+                        colour=age_group_id, fill=age_group_id)) +
+        geom_path(linetype="dashed", na.rm=T) +
+        scale_color_gradientn(colors=rainbow(7)) +
+        scale_fill_gradientn(colors=rainbow(7))
+    if("y_pred" %in% names(df)){
+        p <- p + geom_line(data=df, aes(x=year_id, y=y_pred, 
+                                        colour=age_group_id, 
+                                        group=age_group_id))
+    }
+    if("y_lower" %in% names(df)){
+        p <- p + geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
+    }
+    p
+}
+
 age_group_id <- 2:21 # age groups
 time_points <- 1990:2015 # number of time points 
 forecasting_time_points <- 1990:2040 # forcasted time series
@@ -56,11 +73,10 @@ df$y_obs <- B0 + B_time * df$year_id + B_age * df$age_group_id +
     c(rmvnorm(1, sigma=solve(Q)))
 
 # plot age specific
-ggplot(df, aes(year_id, y_obs, group=age_group_id, colour=age_group_id)) +
-    geom_path(alpha = 0.5) + scale_color_gradientn(colors=rainbow(7))
+time_plot(df)
 
 # plot average across ages
-ggplot(df[,mean(y_obs), by=year_id], aes(year_id, V1)) + geom_path(alpha=0.5)
+time_plot(df[,lapply(.SD, mean), by=year_id])
 
 # fit a model
 lm1 <- lm(y_obs ~ year_id + age_group_id, data=df)
@@ -96,29 +112,16 @@ df_forecast$y_upper <- apply(sim_draws, 1, quantile, .975)
 df_forecast <- as.data.table(left_join(df_forecast, df))
 
 # show past data here too
-ggplot(df_forecast, aes(year_id, y_pred, group=age_group_id, 
-                        colour=age_group_id, fill=age_group_id)) +
-    geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank") + 
-    scale_color_gradientn(colors=rainbow(7)) +
-    scale_fill_gradientn(colors=rainbow(7))
+time_plot(df_forecast)
     
 dff <- df_forecast[,lapply(.SD, mean), by=year_id]
 dff$y_pred <- apply(dff[,new_cols, with=F], 1, mean)
 dff$y_lower <- apply(dff[,new_cols, with=F], 1, quantile, .025)
 dff$y_upper <- apply(dff[,new_cols, with=F], 1, quantile, .975)
 
-ggplot(dff, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
+time_plot(dff)
 
-ggplot(subset(df_forecast, age_group_id == 11), aes(year_id, y_pred, 
-                                                    group=age_group_id, 
-                                                    colour=age_group_id, 
-                                                    fill=age_group_id)) +
-    geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank") + 
-    scale_color_gradientn(colors=rainbow(7)) +
-    scale_fill_gradientn(colors=rainbow(7))
+time_plot(subset(df_forecast, age_group_id == 11))
 
 
 Q_af <- Q_ar1(length(age_group_id), sigma_Q, rho_age) 
@@ -164,19 +167,10 @@ df_true_merged$y_upper <- apply(df_true_merged[,new_cols,with=F], 1, quantile, .
 df_true_merged[year_id < 2015, y_lower:=y_pred,]
 df_true_merged[year_id < 2015, y_upper:=y_pred,]
 
-ggplot(df_true_merged, aes(year_id, y_pred, group=age_group_id, 
-                        colour=age_group_id, fill=age_group_id)) +
-    geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank") + 
-    scale_color_gradientn(colors=rainbow(7)) +
-    scale_fill_gradientn(colors=rainbow(7))
+df_true_merged <- as.data.table(left_join(df_true_merged, df))
+time_plot(df_true_merged)
 
-ggplot(subset(df_true_merged, age_group_id==10), aes(year_id, y_pred, group=age_group_id, 
-                    colour=age_group_id, fill=age_group_id)) +
-    geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank") + 
-    scale_color_gradientn(colors=rainbow(7)) +
-    scale_fill_gradientn(colors=rainbow(7))
+time_plot(subset(df_true_merged, age_group_id == 10))
 
 dfft <- df_true_merged[,lapply(.SD, mean), by=year_id]
 dfft$y_pred <- apply(dfft[,new_cols, with=F], 1, mean)
@@ -185,9 +179,5 @@ dfft$y_upper <- apply(dfft[,new_cols, with=F], 1, quantile, .975)
 dfft[year_id < 2015, y_lower:=y_pred,]
 dfft[year_id < 2015, y_upper:=y_pred,]
 
-ggplot(dfft, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
-    geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
-ggplot(dff, aes(year_id, y_pred)) + geom_path(alpha = 0.5) +
-  geom_ribbon(aes(ymin=y_lower, ymax=y_upper), alpha=0.1, linetype="blank")
-
-
+time_plot(dfft)
+time_plot(dff)
