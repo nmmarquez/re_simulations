@@ -19,9 +19,6 @@ summary(reglm)
 
 # lets emulate this in tmb
 model <- "REMLtest"
-if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
-if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
-if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
 compile(paste0(model, ".cpp"))
 
 run_model <- function(REML=TRUE, model_name=model){
@@ -61,8 +58,15 @@ tol <- 10**-6
 REMLtmb <- run_model()
 all.equal(REMLtmb$b0, REMLlm@beta[1], tolerance=tol)
 all.equal(REMLtmb$b1, REMLlm@beta[2], tolerance=tol)
+all.equal(REMLtmb$sigma, summary(REMLlm)$sigma, tolerance=tol)
 
 # same with non reml version
 MLtmb <- run_model(REML=FALSE)
 all.equal(MLtmb$b0, MLlm@beta[1], tolerance=tol)
 all.equal(MLtmb$b1, MLlm@beta[2], tolerance=tol)
+all.equal(MLtmb$sigma, summary(MLlm)$sigma, tolerance=tol)
+
+# they arent the same either
+all.equal(REMLtmb$b0, MLlm@beta[1], tolerance=tol)
+all.equal(MLtmb$b1, REMLlm@beta[2], tolerance=tol)
+all.equal(MLtmb$sigma, summary(REMLlm)$sigma, tolerance=tol)
