@@ -2,14 +2,14 @@ rm(list = ls())
 pacman::p_load(TMB)
 
 # test out the moving average stuff
-N <- 10000
+N <- 1000
 mu <- 2
-p <- c(1.)
+p <- c(.8, -.3)
 Np <- length(p)
 x <- rep(0, N)
 
 for(i in 1:Np){
-    if(p != 1){
+    if(abs(sum(p)) < 1){
         x[i] <- mu / sum(c(1, -1 * p))
     }
     else{
@@ -44,8 +44,7 @@ Opt$convergence
 
 (sdrep <- sdreport(Obj))
 rep <- Obj$report()
-arima(x, c(1,0,0))
 
 # differences are small
 arima(x, c(Np,0,0))$coef[paste0("ar", 1:Np)] - sdrep$value[-1]
-
+arima(x, c(Np,0,0))$coef
