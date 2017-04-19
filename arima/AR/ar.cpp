@@ -29,8 +29,8 @@ Type objective_function<Type>::operator() () {
             for(int j = 0; j < Np; j++){
                 xhat[i] += x[i - j - 1] * p[j];
             }
+            nll -= dnorm(x[i], xhat[i], sigma, true);
         }
-        nll -= dnorm(x[i], xhat[i], sigma, true);
     }
     
     ADREPORT(mu);

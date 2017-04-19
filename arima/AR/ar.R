@@ -48,3 +48,16 @@ rep <- Obj$report()
 # differences are small
 arima(x, c(Np,0,0))$coef[paste0("ar", 1:Np)] - sdrep$value[-1]
 arima(x, c(Np,0,0))$coef
+
+
+# RW with drift?
+source("~/Documents/re_simulations/arima/AR/snipy/utilities.R")
+set.seed(1234)
+DF <- sim_ar_data(N=1000, p= 1., mu = 2)
+plot(DF$obs)
+forecast::auto.arima(DF$obs)
+forecast::Arima(DF$obs, c(0,1,0), include.drift=T)
+arima(DF$obs, c(1,0,0), xreg=1:nrow(DF), include.mean=F)
+run_arima_TMB(DF$obs, 1)
+
+testlm(DF$obs ~ DF$time)
