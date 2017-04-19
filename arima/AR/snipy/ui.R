@@ -31,6 +31,7 @@ body <- dashboardBody(
 sidebar <- dashboardSidebar(
     sliderInput('N', 'Observations', 10, 10000, 100),
     sliderInput('mu', 'Constant', 0, 5, 0, .2),
+    selectInput("d", "Differences", 0:4, 0),
     selectInput("M", "Lag Terms", 1:5),
     uiOutput("sliders")
 )

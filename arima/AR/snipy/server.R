@@ -14,7 +14,7 @@ shinyServer( function(input, output, session) {
     
     data <- reactive({sim_ar_data(input$N, 
                                   sapply(1:input$M, function(x) input[[paste0("p",x)]]), 
-                                  input$mu)})
+                                  input$mu, input$d)})
     
     output$dataplot <- renderPlot({
         ggplot(data(), aes(x=time, y=obs)) + geom_line()
@@ -23,6 +23,6 @@ shinyServer( function(input, output, session) {
     output$estplot <- renderPlot({
         print(head(data()$obs))
         print(as.integer(input$M))
-        plot_models(data()$obs, as.integer(input$M))
+        plot_models(data()$obs, as.integer(input$M), as.integer(input$d))
     })
 })

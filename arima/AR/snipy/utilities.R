@@ -28,7 +28,7 @@ sim_ar_data <- function(N, p, mu, d=0, sigma=1){
     return(data.table(obs=x, time=1:N))
 }
 
-run_arima_base <- function(x, M, d){
+run_arima_base <- function(x, M, d=0){
     results <- arima(x, c(M,d,0))
     ord <- c("intercept", paste0("ar", 1:M))[ifelse(d > 0, 2, 1):(M+1)]
     int <- results$coef["intercept"] * (1 - sum(results$coef[paste0("ar", 1:M)]))
@@ -58,12 +58,12 @@ run_arima_TMB <- function(x, M, d=0){
     data.table(val=mu, se=se, type="arima TMB", term=terms)
 }
 
-run_models <- function(x, M){
-    rbindlist(list(run_arima_base(x, M), run_arima_TMB(x, M)))
+run_models <- function(x, M, d){
+    rbindlist(list(run_arima_base(x, M, d), run_arima_TMB(x, M, d)))
 }
 
-plot_models <- function(x, M){
-    results <- run_models(x, M)
+plot_models <- function(x, M, d){
+    results <- run_models(x, M, d)
     ggplot(data = results, aes(x = term, y = val)) + 
         geom_point() + 
         geom_errorbar(aes(ymin = val - se*1.96,ymax = val + se*1.96)) +
