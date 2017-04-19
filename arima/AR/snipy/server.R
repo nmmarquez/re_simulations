@@ -8,7 +8,7 @@ shinyServer( function(input, output, session) {
     output$sliders <- renderUI({
         numIndividuals <- as.integer(input$M)
         lapply(1:numIndividuals, function(i) {
-            sliderInput(paste0("p", i), paste0("Lag Term ", i), -2, 2, 0, .01)
+            sliderInput(paste0("p", i), paste0("Lag Term ", i), -2, 2, 0, .05)
         })
     })
     

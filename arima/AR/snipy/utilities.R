@@ -23,7 +23,7 @@ sim_ar_data <- function(N, p, mu, sigma=1){
 
 run_arima_base <- function(x, M){
     results <- arima(x, c(M,0,0))
-    mu <- c(results$coef[M+1], results$coef[1:M])
+    mu <- c(results$coef[M+1] * (1 - sum(results$coef[1:M])), results$coef[1:M])
     se <- c(diag(results$var.coef)[M+1], diag(results$var.coef)[1:M])**.5
     terms <- c("constant", paste0("lag_", 1:M))
     data.table(val=mu, se=se, type="arima base", term=terms)
