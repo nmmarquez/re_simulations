@@ -41,10 +41,9 @@ run_arima_base <- function(x, M, d=0){
 run_arima_TMB <- function(x, M, d=0){
     model_name <- "ar"
     Params <- list(mu=0, log_sigma=0, p=rep(0, M))
-    Data <- list(x=x)
+    Data <- list(raw=x, d=d)
     Map <- list()
     if(d > 0){
-        Data[["x"]] <- diff(x, differences = d)
         Map[["mu"]] <- as.factor(NA)
     }
     
