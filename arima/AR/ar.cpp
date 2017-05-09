@@ -22,8 +22,9 @@ vector<Type> diff(vector<Type> vec, int differences) {
 template<class Type>
 Type objective_function<Type>::operator() () {
     
-    DATA_VECTOR(raw);
-    DATA_INTEGER(d);
+    DATA_VECTOR(x);
+    //DATA_VECTOR(raw);
+    //DATA_INTEGER(d);
     //DATA_MATRIX(covs);
     
     PARAMETER(mu);
@@ -32,7 +33,7 @@ Type objective_function<Type>::operator() () {
     //PARAMETER_VECTOR(b);
     
     // name some helpful variables
-    vector<Type> x = diff(raw, d);
+    //vector<Type> x = diff(raw, d);
     int N = x.size();
     int Np = p.size();
     vector<Type> xhat(N);
