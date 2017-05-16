@@ -1,4 +1,5 @@
 rm(list=ls())
+pacman::p_load(data.table, ggplot2, INLA, TMB)
 load(file="~/Documents/re_simulations/inla/model_results.Rda")
 
 mesh_to_dt <- function(x, proj, time, model){
@@ -11,9 +12,9 @@ mesh_to_dt <- function(x, proj, time, model){
 datalist <- lapply(1:m, function(i) 
     mesh_to_dt(x_[,i] - mean(x_[,i]), proj, i, "data"))
 inlalist <- lapply(1:m, function(i) 
-    mesh_to_dt(res$summary.random$i$mean[iset$i.group==12], proj, i, "inla"))
+    mesh_to_dt(res$summary.random$i$mean[iset$i.group==i], proj, i, "inla"))
 tmblist <- lapply(1:m, function(i) 
-    mesh_to_dt(Report$phi[,j], proj, i, "tmb"))
+    mesh_to_dt(Report$phi[,i], proj, i, "tmb"))
 
 
 DT <- rbindlist(c(datalist, inlalist, tmblist))
@@ -25,8 +26,7 @@ for(i in 1:m){
           labs(title=paste0("Time Point: ", i)))
 }
 
-summary(res)
 c(sd.y, 1 / res$summary.hyperpar[1,"mean"]**.5, Report$sigma)
-c(tau0, exp(c(res$summary.hyperpar[2,"mean"], Report$logtau)))
+c(tau0, exp(c(res$summary.hyperpar[2,"mean"], Report$logtau))**.5)
 c(kappa0, exp(c(res$summary.hyperpar[3,"mean"], Report$logkappa)))
 c(rho, res$summary.hyperpar[4,"mean"], Report$rho)

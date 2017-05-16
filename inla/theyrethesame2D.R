@@ -2,7 +2,7 @@ rm(list=ls())
 output_file <- file("~/Documents/re_simulations/inla/sim2d.Rout", open="wt")
 sink(output_file)
 sink(output_file, type="message")
-pacman::p_load(INLA, ggplot2, data.table, lattice, TMB)
+pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix)
 set.seed(123)
 # compare the INLA Q matrix vs the by hand to make sure we are on the same page
 # use inla to create the model and make sure results match TMB
@@ -20,10 +20,11 @@ n <- 500 # number of observations on the grid
 m <- 12 # number of time points
 loc <- matrix(runif(n*2), n, 2) # simulate observed points
 mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05)) # create mesh
+jpeg("~/Documents/re_simulations/inla/mesh.jpg")
 par(mfrow=c(1,1))
 plot(mesh)
 points(loc[,1], loc[,2], col="red", pch=20)
-
+dev.off()
 # project mesh using inla default projection
 proj <- inla.mesh.projector(mesh)
 
@@ -44,28 +45,36 @@ Q2 <- tau0**2 * (kappa0**4 * spde$param.inla$M0 +
 # Should all be equal
 print(all.equal(Q1, Q2))
 
-# simulate m sets from the precision matrix had no idea INLA had this!!!
-x.m <- inla.qsample(n=m, Q1)
+# # simulate m sets from the precision matrix had no idea INLA had this!!!
+# x.m <- inla.qsample(n=m, Q1)
+# 
+# # use the janky sim code found here 
+# # http://www.math.ntnu.no/inla/r-inla.org/tutorials/spde/html/
+# x_ <- x.m
+# for (j in 2:m) 
+#     x_[,j] <- rho*x_[,j-1] + sqrt(1-rho^2)*x.m[,j]
 
-# use the janky sim code found here 
-# http://www.math.ntnu.no/inla/r-inla.org/tutorials/spde/html/
-x_ <- x.m
-for (j in 2:m) 
-    x_[,j] <- rho*x_[,j-1] + sqrt(1-rho^2)*x.m[,j]
+# sim by krnoecker
+Q <- kronecker(Q.AR1(m, 1, rho),
+               inla.spde2.precision(spde, theta=c(log(tau0), log(kappa0))))
+x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
 
 # lets only take the observed mesh not the whole set
 x <- x_[mesh$idx$loc,]
 
 # plot using the above websites code
 c100 <- rainbow(101)
+
+jpeg("~/Documents/re_simulations/inla/pointplot.jpg")
 par(mfrow=c(4,3), mar=c(0,0,0,0))
 for (j in 1:m)
     plot(loc, col=c100[round(100*(x[,j]-min(x[,j]))/diff(range(x[,j])))], 
          axes=FALSE, asp=1, pch=19, cex=0.5)
+dev.off()
 
 # plot using our use defined code to see the whole surface
 for (j in 1:m){
-    plot_mesh_sim(x_[,j], proj)
+   print(plot_mesh_sim(x_[,j], proj) + labs(title=paste0("Time: ", j)))
 }
 
 # lets build up a linear model with dummies to estimate
@@ -113,9 +122,9 @@ setwd("~/Documents/re_simulations/inla/")
 
 # compile the code if not there
 model <- "st"
-if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
-if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
-if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
+#if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
+#if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
+#if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
 compile(paste0(model, ".cpp"))
 
 # set the data

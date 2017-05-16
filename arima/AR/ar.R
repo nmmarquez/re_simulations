@@ -57,7 +57,7 @@ Obj <- MakeADFun(data=Data, parameters=Params, DLL=model_name, map=Map)
 system.time(Opt <- nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr))
 Opt$convergence
 
-(sdrep <- sdreport(Obj))
+(sdrep <- sdreport(Obj, getJointPrecision = T))
 rep <- Obj$report()
 
 # differences are small

@@ -52,6 +52,10 @@ Opt$convergence
 Report <- Obj$report()
 Report$betas
 Report$alpha
+
+# get the joint precision matrix of the latent random effects
+(sdrep <- sdreport(Obj, getJointPrecision = T))
+
 dyn.unload(dynlib(model_name))
 
 # Now we will simulate for teh NB2 model using R's built in rndbinom function
