@@ -1,10 +1,11 @@
 rm(list=ls())
-pacman::p_load(data.table, ggplot2, INLA, TMB)
+pacman::p_load(data.table, ggplot2, INLA, TMB, ggthemes)
 load(file="~/Documents/re_simulations/inla/model_results3D.Rda")
 
 mesh_to_dt <- function(x, proj, age, time, model){
     M <- length(proj$x)
-    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), time=time, age=age,
+    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), time=time+2000, 
+                     age=paste(age, "year old"),
                      obs=c(inla.mesh.project(proj, field=x)), model=model)
     DT
 }
@@ -22,16 +23,17 @@ tmblist <- lapply(1:nrow(tdems), function(i)
 
 DT <- rbindlist(c(datalist, tmblist))
 
-for(i in 1:m){
-    print(ggplot(DT[time==i,], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-              theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_wrap(~model + age) +
-              scale_fill_gradientn(colors=heat.colors(8)) +
-              labs(title=paste0("Time Point: ", i)))
-}
-
 c(sd.y, Report$sigma)
 c(tau0, exp(Report$logtau))
 c(kappa0, exp(Report$logkappa))
 c(rho, Report$rho)
+    
+ys_ <- 2001:2004
+as_ <- paste(1:2, "year old")
 
-
+jpeg("~/Documents/re_simulations/inla/proj3drez.jpg")
+print(ggplot(DT[time %in% ys_ & age %in% as_,], aes(x, y, z= obs)) +
+          geom_tile(aes(fill = obs)) + lims(y=c(0,1), x=c(0,1)) + 
+          facet_grid(time~model + age) + theme_bw() + labs(x="", y="") +
+          scale_fill_gradientn(colors=heat.colors(8)))
+dev.off()
