@@ -1,23 +1,143 @@
-null device 
-          1 
+
+> sink(output_file, type="message")
+
+> pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix)
+
+> set.seed(123)
+
+> # compare the INLA Q matrix vs the by hand to make sure we are on the same page
+> # use inla to create the model and make sure results match TMB
+> 
+ .... [TRUNCATED] 
+
+> n <- 500 # number of observations on the grid
+
+> m <- 12 # number of time points
+
+> loc <- matrix(runif(n*2), n, 2) # simulate observed points
+
+> mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05)) # create mesh
+
+> jpeg("~/Documents/re_simulations/inla/mesh.jpg")
+
+> par(mfrow=c(1,1))
+
+> plot(mesh)
+
+> points(loc[,1], loc[,2], col="red", pch=20)
+
+> dev.off()
+RStudioGD 
+        2 
+
+> # project mesh using inla default projection
+> proj <- inla.mesh.projector(mesh)
+
+> sigma0 <-  .3   # Standard deviation
+
+> range0 <- 1. # Spatial range
+
+> kappa0 <- sqrt(8)/range0 # inla paramter transform
+
+> tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0) # inla parameter transform
+
+> rho <- .91 # tenporal autocorrelation
+
+> spde <- inla.spde2.matern(mesh) # create the spde from the mesh
+
+> # parameterize the spde and get the projected precision matrix
+> Q1 <- inla.spde2.precision(spde, theta=c(log(tau0), log(kappa0)))
 Note: method with signature ‘diagonalMatrix#sparseMatrix’ chosen for function ‘%*%’,
  target signature ‘ddiMatrix#dgTMatrix’.
  "Matrix#TsparseMatrix" would also be valid
 Note: method with signature ‘TsparseMatrix#Matrix’ chosen for function ‘%*%’,
  target signature ‘dgTMatrix#ddiMatrix’.
  "sparseMatrix#diagonalMatrix" would also be valid
+
+> # calculate the precision matrix by hand in order to make sure you got the
+> # process down for TMB
+> Q2 <- tau0**2 * (kappa0**4 * spde$param.inla$M .... [TRUNCATED] 
+
+> # Should all be equal
+> print(all.equal(Q1, Q2))
 [1] TRUE
+
+> # # simulate m sets from the precision matrix had no idea INLA had this!!!
+> # x.m <- inla.qsample(n=m, Q1)
+> # 
+> # # use the janky sim code found  .... [TRUNCATED] 
 Note: method with signature ‘dsparseMatrix#dsparseMatrix’ chosen for function ‘kronecker’,
  target signature ‘dgTMatrix#dgCMatrix’.
  "TsparseMatrix#sparseMatrix" would also be valid
-null device 
-          1 
-There were 12 warnings (use warnings() to see them)
+
+> x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
+
+> # lets only take the observed mesh not the whole set
+> x <- x_[mesh$idx$loc,]
+
+> # plot using the above websites code
+> c100 <- rainbow(101)
+
+> jpeg("~/Documents/re_simulations/inla/pointplot.jpg")
+
+> par(mfrow=c(4,3), mar=c(0,0,0,0))
+
+> for (j in 1:m)
++     plot(loc, col=c100[round(100*(x[,j]-min(x[,j]))/diff(range(x[,j])))], 
++          axes=FALSE, asp=1, pch=19, cex=0.5)
+
+> dev.off()
+RStudioGD 
+        2 
+
+> # plot using our use defined code to see the whole surface
+> for (j in 1:m){
++    print(plot_mesh_sim(x_[,j], proj) + labs(title=paste0("Time: ", j) .... [TRUNCATED] 
+
+> # lets build up a linear model with dummies to estimate
+> table(ccov <- factor(sample(LETTERS[1:3], n*m, replace=TRUE)) )
 
    A    B    C 
 2050 1969 1981 
+
+> beta <- -1:1
+
+> sd.y <- 0.1
+
+> y <- beta[unclass(ccov)] + x + rnorm(n*m, 0, sd.y)
+
+> tapply(y, ccov, mean)
          A          B          C 
 -0.8004841  0.2047530  1.2052436 
+
+> isel <- sample(1:(n*m), n*m/2)
+
+> dat <- data.table(y=as.vector(y), w=ccov, 
++                   time=rep(1:m, each=n) - 1, 
++                   xcoo=rep(loc[,1], m), 
++              .... [TRUNCATED] 
+
+> # build the inla stuff that Im not 100 % sure what it does but theres a 
+> # projector matrix and some priors and the most stacked lists uve ever se .... [TRUNCATED] 
+
+> A <- inla.spde.make.A(mesh=mesh, 
++                       loc=cbind(dat$xcoo, dat$ycoo), 
++                       group=dat$time+1) 
+
+> sdat <- inla.stack(tag='stdata', data=list(y=dat$y), 
++                    A=list(A,1),  effects=list(iset, w=dat$w)) 
+
+> h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
+
+> formulae <- y ~ 0 + w + 
++     f(i, model=spde, group=i.group, 
++       control.group=list(model='ar1', hyper=h.spec)) 
+
+> prec.prior <- list(prior='pc.prec', param=c(1, 0.01))
+
+> # Run the inla model and time it
+> print(system.time(res <- inla(formulae,  data=inla.stack.data(sdat),
++                     control.predictor=list .... [TRUNCATED] 
 Note: method with signature ‘CsparseMatrix#Matrix#missing#replValue’ chosen for function ‘[<-’,
  target signature ‘dgCMatrix#ngCMatrix#missing#numeric’.
  "Matrix#nsparseMatrix#missing#replValue" would also be valid
@@ -27,351 +147,3 @@ Note: method with signature ‘Matrix#numLike’ chosen for function ‘%*%’,
 Note: method with signature ‘sparseMatrix#matrix’ chosen for function ‘%*%’,
  target signature ‘dgTMatrix#matrix’.
  "TsparseMatrix#ANY" would also be valid
-    user   system  elapsed 
-6967.012  202.156 2161.219 
-
-Call:
-c("inla(formula = formulae, data = inla.stack.data(sdat), control.predictor = list(compute = TRUE, ",  "    A = inla.stack.A(sdat)), control.family = list(hyper = list(theta = prec.prior)), ",  "    control.fixed = list(expand.factor.strategy = \"inla\"))" )
-
-Time used:
- Pre-processing    Running inla Post-processing           Total 
-         0.8257       2159.3341          1.0437       2161.2035 
-
-Fixed effects:
-     mean     sd 0.025quant 0.5quant 0.975quant    mode kld
-A -0.8647 0.7081    -2.2759  -0.8641     0.5415 -0.8629   0
-B  0.1317 0.7081    -1.2795   0.1323     1.5379  0.1335   0
-C  1.1305 0.7081    -0.2807   1.1311     2.5367  1.1323   0
-
-Random effects:
-Name	  Model
- i   SPDE2 model 
-
-Model hyperparameters:
-                                            mean     sd 0.025quant 0.5quant
-Precision for the Gaussian observations 104.7538 3.9735    97.0772 104.7126
-Theta1 for i                             -2.0143 0.0368    -2.0859  -2.0147
-Theta2 for i                              0.9944 0.0902     0.8148   0.9953
-GroupRho for i                            0.9213 0.0079     0.9045   0.9217
-                                        0.975quant     mode
-Precision for the Gaussian observations   112.6977 104.6646
-Theta1 for i                               -1.9415  -2.0156
-Theta2 for i                                1.1695   0.9979
-GroupRho for i                              0.9357   0.9226
-
-Expected number of effective parameters(std dev): 1005.31(32.53)
-Number of equivalent replicates : 2.984 
-
-Marginal log-Likelihood:  1498.23 
-Posterior marginals for linear predictor and fitted values computed
-
-[1] 0
-Order of parameters:
-[1] "logtau"   "logsigma" "logitrho" "logkappa" "beta"     "phi"     
-Not matching template order:
-[1] "beta"     "logtau"   "logkappa" "logitrho" "logsigma" "phi"     
-Your parameter list has been re-ordered.
-(Disable this warning with checkParameterOrder=FALSE)
-Optimizing tape... Done
-iter: 1  value: -80885.29 mgc: 4.470591 ustep: 1 
-iter: 2  mgc: 1.52977e-09 
-iter: 1  mgc: 1.52977e-09 
-Matching hessian patterns... Done
-outer mgc:  981.847 
-iter: 1  value: -81622.75 mgc: 2.222252 ustep: 1 
-iter: 2  mgc: 1.062834e-09 
-iter: 1  value: -32261.63 mgc: 55.40493 ustep: 1 
-iter: 2  mgc: 1.256414e-09 
-iter: 1  mgc: 1.062834e-09 
-outer mgc:  1810.619 
-iter: 1  value: -75044.58 mgc: 103.0747 ustep: 1 
-iter: 2  mgc: 1.1687e-09 
-iter: 1  value: -82092.24 mgc: 3.838174 ustep: 1 
-iter: 2  mgc: 1.047685e-09 
-iter: 1  mgc: 1.047685e-09 
-outer mgc:  1623.053 
-iter: 1  value: -80799.55 mgc: 21.66196 ustep: 1 
-iter: 2  mgc: 1.971929e-09 
-iter: 1  mgc: 1.971929e-09 
-outer mgc:  4356.602 
-iter: 1  value: -74774.04 mgc: 12.28999 ustep: 1 
-iter: 2  mgc: 7.448897e-10 
-iter: 1  mgc: 7.448897e-10 
-outer mgc:  4919.113 
-iter: 1  value: -68227.65 mgc: 10.96021 ustep: 1 
-iter: 2  mgc: 5.353086e-10 
-iter: 1  mgc: 5.353086e-10 
-outer mgc:  2448.049 
-iter: 1  value: -68722.04 mgc: 22.68562 ustep: 1 
-iter: 2  mgc: 5.037573e-10 
-iter: 1  value: -68534.2 mgc: 3.886439 ustep: 1 
-iter: 2  mgc: 4.613919e-10 
-iter: 1  mgc: 4.613919e-10 
-outer mgc:  1531.1 
-iter: 1  value: -68672.06 mgc: 4.628092 ustep: 1 
-iter: 2  mgc: 3.053284e-10 
-iter: 1  value: -68648.01 mgc: 27.71225 ustep: 1 
-iter: 2  mgc: 2.842252e-10 
-iter: 1  mgc: 2.842252e-10 
-outer mgc:  2670.456 
-iter: 1  value: -60152.53 mgc: 43.86636 ustep: 1 
-iter: 2  mgc: 3.520871e-10 
-iter: 1  value: -68458.96 mgc: 8.477856 ustep: 1 
-iter: 2  mgc: 3.897818e-10 
-iter: 1  value: -68669.87 mgc: 3.845794 ustep: 1 
-iter: 2  mgc: 4.278329e-10 
-iter: 1  mgc: 4.278329e-10 
-outer mgc:  352.6059 
-iter: 1  value: -68352.58 mgc: 1.532479 ustep: 1 
-iter: 2  mgc: 5.320769e-10 
-iter: 1  mgc: 5.320769e-10 
-outer mgc:  551.4812 
-iter: 1  value: -67586.75 mgc: 5.219873 ustep: 1 
-iter: 2  mgc: 3.865288e-10 
-iter: 1  mgc: 3.865288e-10 
-outer mgc:  1080.043 
-iter: 1  value: -66837.57 mgc: 4.945025 ustep: 1 
-iter: 2  mgc: 4.226216e-10 
-iter: 1  mgc: 4.226216e-10 
-outer mgc:  957.8982 
-iter: 1  value: -66083.4 mgc: 5.286867 ustep: 1 
-iter: 2  mgc: 3.995678e-10 
-iter: 1  mgc: 3.995678e-10 
-outer mgc:  1013.409 
-iter: 1  value: -64501.67 mgc: 9.936556 ustep: 1 
-iter: 2  mgc: 2.882219e-10 
-iter: 1  value: -65369.37 mgc: 5.069408 ustep: 1 
-iter: 2  mgc: 3.179954e-10 
-iter: 1  mgc: 3.179954e-10 
-outer mgc:  925.2879 
-iter: 1  value: -66213.15 mgc: 15.46684 ustep: 1 
-iter: 2  mgc: 5.71275e-10 
-iter: 1  value: -65345.67 mgc: 1.529424 ustep: 1 
-iter: 2  mgc: 2.700027e-10 
-iter: 1  mgc: 2.700027e-10 
-outer mgc:  209.0883 
-iter: 1  value: -65226.42 mgc: 0.9108298 ustep: 1 
-iter: 2  mgc: 2.308064e-10 
-iter: 1  mgc: 2.308064e-10 
-outer mgc:  332.3071 
-iter: 1  value: -64919.79 mgc: 2.214313 ustep: 1 
-iter: 2  mgc: 3.072066e-10 
-iter: 1  mgc: 3.072066e-10 
-outer mgc:  466.0129 
-iter: 1  value: -64618.09 mgc: 2.373352 ustep: 1 
-iter: 2  mgc: 3.077322e-10 
-iter: 1  mgc: 3.077322e-10 
-outer mgc:  423.7438 
-iter: 1  value: -64022.02 mgc: 4.214682 ustep: 1 
-iter: 2  mgc: 1.853184e-10 
-iter: 1  value: -64399.65 mgc: 2.191802 ustep: 1 
-iter: 2  mgc: 3.29674e-10 
-iter: 1  mgc: 3.29674e-10 
-outer mgc:  817.048 
-iter: 1  value: -64162.1 mgc: 2.386963 ustep: 1 
-iter: 2  mgc: 3.782894e-10 
-iter: 1  mgc: 3.782894e-10 
-outer mgc:  343.7405 
-iter: 1  value: -63921.78 mgc: 2.114003 ustep: 1 
-iter: 2  mgc: 2.499581e-10 
-iter: 1  mgc: 2.499581e-10 
-outer mgc:  721.8578 
-iter: 1  value: -63672.56 mgc: 2.176992 ustep: 1 
-iter: 2  mgc: 4.381089e-10 
-iter: 1  mgc: 4.381089e-10 
-outer mgc:  246.5808 
-iter: 1  value: -63448.67 mgc: 2.239607 ustep: 1 
-iter: 2  mgc: 3.524888e-10 
-iter: 1  value: -63625.87 mgc: 1.001338 ustep: 1 
-iter: 2  mgc: 4.302006e-10 
-iter: 1  mgc: 4.302006e-10 
-outer mgc:  376.101 
-iter: 1  value: -63545.56 mgc: 0.8541387 ustep: 1 
-iter: 2  mgc: 2.420991e-10 
-iter: 1  mgc: 2.420991e-10 
-outer mgc:  136.2802 
-iter: 1  value: -63355.43 mgc: 1.00721 ustep: 1 
-iter: 2  mgc: 3.440936e-10 
-iter: 1  mgc: 3.440936e-10 
-outer mgc:  309.3421 
-iter: 1  value: -62948.98 mgc: 2.205261 ustep: 1 
-iter: 2  mgc: 2.767255e-10 
-iter: 1  mgc: 2.767255e-10 
-outer mgc:  262.2154 
-iter: 1  value: -62550.41 mgc: 2.638668 ustep: 1 
-iter: 2  mgc: 2.112094e-10 
-iter: 1  mgc: 2.112094e-10 
-outer mgc:  328.5706 
-iter: 1  value: -61791.29 mgc: 4.229752 ustep: 1 
-iter: 2  mgc: 2.345317e-10 
-iter: 1  mgc: 2.345317e-10 
-outer mgc:  903.8098 
-iter: 1  value: -61939.51 mgc: 2.950891 ustep: 1 
-iter: 2  mgc: 2.65922e-10 
-iter: 1  value: -61824.45 mgc: 2.282824 ustep: 1 
-iter: 2  mgc: 2.098335e-10 
-iter: 1  mgc: 2.098335e-10 
-outer mgc:  494.3893 
-iter: 1  value: -61925.68 mgc: 1.21623 ustep: 1 
-iter: 2  mgc: 2.411707e-10 
-iter: 1  mgc: 2.411707e-10 
-outer mgc:  140.0941 
-iter: 1  value: -62011.96 mgc: 1.328272 ustep: 1 
-iter: 2  mgc: 2.975676e-10 
-iter: 1  value: -61936.8 mgc: 1.011004 ustep: 1 
-iter: 2  mgc: 3.235396e-10 
-iter: 1  value: -61912.9 mgc: 0.5805118 ustep: 1 
-iter: 2  mgc: 2.464587e-10 
-iter: 1  mgc: 2.464587e-10 
-outer mgc:  153.8756 
-iter: 1  value: -61921.78 mgc: 0.4624697 ustep: 1 
-iter: 2  mgc: 2.290662e-10 
-iter: 1  mgc: 2.290662e-10 
-outer mgc:  82.60368 
-iter: 1  value: -61946.72 mgc: 0.5862023 ustep: 1 
-iter: 2  mgc: 2.830545e-10 
-iter: 1  mgc: 2.830545e-10 
-outer mgc:  133.5744 
-iter: 1  value: -62042.94 mgc: 0.6533464 ustep: 1 
-iter: 2  mgc: 3.185239e-10 
-iter: 1  value: -62171.54 mgc: 0.3773103 ustep: 1 
-iter: 2  mgc: 3.191168e-10 
-iter: 1  value: -62673.11 mgc: 1.504431 ustep: 1 
-iter: 2  mgc: 4.668124e-10 
-iter: 1  value: -63868.87 mgc: 3.754697 ustep: 1 
-iter: 2  mgc: 2.353069e-10 
-iter: 1  mgc: 2.353069e-10 
-outer mgc:  612.1973 
-iter: 1  value: -65437.44 mgc: 9.034829 ustep: 1 
-iter: 2  mgc: 2.90507e-10 
-iter: 1  value: -64395.55 mgc: 4.67749 ustep: 1 
-iter: 2  mgc: 3.118839e-10 
-iter: 1  value: -64050.13 mgc: 3.334222 ustep: 1 
-iter: 2  mgc: 3.456559e-10 
-iter: 1  value: -63862.55 mgc: 2.624706 ustep: 1 
-iter: 2  mgc: 2.761779e-10 
-iter: 1  value: -63863.09 mgc: 1.11601 ustep: 1 
-iter: 2  mgc: 2.797981e-10 
-iter: 1  mgc: 2.797981e-10 
-outer mgc:  158.819 
-iter: 1  value: -63824.58 mgc: 0.8724484 ustep: 1 
-iter: 2  mgc: 4.628197e-10 
-iter: 1  mgc: 4.628197e-10 
-outer mgc:  220.1733 
-iter: 1  value: -63884.54 mgc: 0.8188499 ustep: 1 
-iter: 2  mgc: 3.046691e-10 
-iter: 1  mgc: 3.046691e-10 
-outer mgc:  115.7244 
-iter: 1  value: -64011.87 mgc: 0.8689261 ustep: 1 
-iter: 2  mgc: 4.120728e-10 
-iter: 1  value: -64187.38 mgc: 0.6778488 ustep: 1 
-iter: 2  mgc: 2.102538e-10 
-iter: 1  value: -64795.81 mgc: 2.394643 ustep: 1 
-iter: 2  mgc: 3.770611e-10 
-iter: 1  value: -65765.29 mgc: 3.92906 ustep: 1 
-iter: 2  mgc: 3.583027e-10 
-iter: 1  mgc: 3.583027e-10 
-outer mgc:  438.676 
-iter: 1  value: -64057.55 mgc: 6.85341 ustep: 1 
-iter: 2  mgc: 2.309819e-10 
-iter: 1  mgc: 2.309819e-10 
-outer mgc:  654.6906 
-iter: 1  value: -60956.69 mgc: 14.02428 ustep: 1 
-iter: 2  mgc: 2.852011e-10 
-iter: 1  value: -62601.85 mgc: 7.610917 ustep: 1 
-iter: 2  mgc: 2.062332e-10 
-iter: 1  value: -63379.38 mgc: 4.80222 ustep: 1 
-iter: 2  mgc: 5.674268e-10 
-iter: 1  value: -64012.32 mgc: 2.870317 ustep: 1 
-iter: 2  mgc: 2.91049e-10 
-iter: 1  value: -64048.19 mgc: 1.104703 ustep: 1 
-iter: 2  mgc: 1.928613e-10 
-iter: 1  mgc: 1.928613e-10 
-outer mgc:  140.2178 
-iter: 1  value: -63985.65 mgc: 0.6426938 ustep: 1 
-iter: 2  mgc: 2.448737e-10 
-iter: 1  value: -63912.15 mgc: 0.7266672 ustep: 1 
-iter: 2  mgc: 2.921563e-10 
-iter: 1  mgc: 2.921563e-10 
-outer mgc:  325.6359 
-iter: 1  value: -63432.85 mgc: 2.438686 ustep: 1 
-iter: 2  mgc: 3.173763e-10 
-iter: 1  mgc: 3.173763e-10 
-outer mgc:  125.2913 
-iter: 1  value: -62953.81 mgc: 2.429905 ustep: 1 
-iter: 2  mgc: 2.467998e-10 
-iter: 1  mgc: 2.467998e-10 
-outer mgc:  227.4445 
-iter: 1  value: -63194.12 mgc: 1.449284 ustep: 1 
-iter: 2  mgc: 2.662013e-10 
-iter: 1  mgc: 2.662013e-10 
-outer mgc:  118.1272 
-iter: 1  value: -63534.43 mgc: 2.132206 ustep: 1 
-iter: 2  mgc: 4.225377e-10 
-iter: 1  mgc: 4.225377e-10 
-outer mgc:  110.0318 
-iter: 1  value: -63045.57 mgc: 2.086992 ustep: 1 
-iter: 2  mgc: 2.601784e-10 
-iter: 1  mgc: 2.601784e-10 
-outer mgc:  57.2266 
-iter: 1  value: -62695.28 mgc: 4.713556 ustep: 1 
-iter: 2  mgc: 4.182949e-10 
-iter: 1  mgc: 4.182949e-10 
-outer mgc:  120.8021 
-iter: 1  value: -61901.9 mgc: 5.652197 ustep: 1 
-iter: 2  mgc: 4.572782e-10 
-iter: 1  mgc: 4.572782e-10 
-outer mgc:  153.6145 
-iter: 1  value: -62253.98 mgc: 3.839624 ustep: 1 
-iter: 2  mgc: 2.824498e-10 
-iter: 1  mgc: 2.824498e-10 
-outer mgc:  55.87225 
-iter: 1  value: -62023.2 mgc: 6.270471 ustep: 1 
-iter: 2  mgc: 2.749177e-10 
-iter: 1  value: -62219.41 mgc: 1.200659 ustep: 1 
-iter: 2  mgc: 3.353546e-10 
-iter: 1  value: -62253.81 mgc: 0.3498438 ustep: 1 
-iter: 2  mgc: 2.362177e-10 
-iter: 1  value: -62254.05 mgc: 0.09012835 ustep: 1 
-iter: 2  mgc: 2.487111e-10 
-iter: 1  mgc: 2.487111e-10 
-outer mgc:  6.443444 
-iter: 1  value: -62254.42 mgc: 0.05570443 ustep: 1 
-iter: 2  mgc: 2.291754e-10 
-iter: 1  value: -62255.14 mgc: 0.1080687 ustep: 1 
-iter: 2  mgc: 2.074911e-10 
-iter: 1  mgc: 2.074911e-10 
-outer mgc:  21.79203 
-iter: 1  value: -62241.96 mgc: 0.3331854 ustep: 1 
-iter: 2  mgc: 1.7508e-10 
-iter: 1  value: -62216.29 mgc: 0.6190839 ustep: 1 
-iter: 2  mgc: 2.090553e-10 
-iter: 1  value: -62134.48 mgc: 1.994402 ustep: 1 
-iter: 2  mgc: 2.566479e-10 
-iter: 1  mgc: 2.566479e-10 
-outer mgc:  45.41626 
-iter: 1  value: -62066.99 mgc: 3.28523 ustep: 1 
-iter: 2  mgc: 2.107277e-10 
-iter: 1  value: -62106.9 mgc: 1.402515 ustep: 1 
-iter: 2  mgc: 2.581211e-10 
-iter: 1  mgc: 2.581211e-10 
-outer mgc:  51.21172 
-iter: 1  value: -62145.25 mgc: 0.2963576 ustep: 1 
-iter: 2  mgc: 3.888064e-10 
-iter: 1  mgc: 3.888064e-10 
-outer mgc:  1.125558 
-iter: 1  value: -62135.74 mgc: 0.03722925 ustep: 1 
-iter: 2  mgc: 1.887173e-10 
-iter: 1  mgc: 1.887173e-10 
-outer mgc:  0.2611685 
-iter: 1  value: -62137.79 mgc: 0.04030952 ustep: 1 
-iter: 2  mgc: 1.94616e-10 
-iter: 1  mgc: 1.94616e-10 
-outer mgc:  0.01439812 
-iter: 1  value: -62137.81 mgc: 0.007439898 ustep: 1 
-iter: 2  mgc: 2.19602e-10 
-iter: 1  mgc: 2.19602e-10 
-outer mgc:  0.001619769 
-iter: 1  mgc: 2.19602e-10 
-    user   system  elapsed 
-4068.664    6.944 4076.016 

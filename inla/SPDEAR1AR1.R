@@ -80,7 +80,8 @@ compile(paste0(model, ".cpp"))
 # set the data
 Data <- list(y=DT$y, T=m, geo=DT$geo, temporal=DT$time, A=k, age=DT$age,
              cov=sapply(c("A", "B", "C"), function(x) as.integer(x == DT$w)),
-             M0=spde$param.inla$M0, M1=spde$param.inla$M1, M2=spde$param.inla$M2)
+             M0=spde$param.inla$M0, M1=spde$param.inla$M1, 
+             M2=spde$param.inla$M2)
 
 # set the param starting points
 Params <- list(logtau=0, logsigma=0, logitrho=c(0, 0), logkappa=0, 
