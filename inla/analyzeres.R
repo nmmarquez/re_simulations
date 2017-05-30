@@ -19,12 +19,20 @@ tmblist <- lapply(1:m, function(i)
 
 DT <- rbindlist(c(datalist, inlalist, tmblist))
 
+ggplot(DT[model=="data",], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+          theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_wrap(~model) +
+          scale_fill_gradientn(colors=heat.colors(8))
+
 for(i in 1:m){
     print(ggplot(DT[time==i,], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
           theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_wrap(~model) +
           scale_fill_gradientn(colors=heat.colors(8)) +
           labs(title=paste0("Time Point: ", i)))
 }
+
+ggplot(DT[time %in% 1:3,], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+    theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_grid(model~time) +
+    scale_fill_gradientn(colors=heat.colors(8))
 
 c(sd.y, 1 / res$summary.hyperpar[1,"mean"]**.5, Report$sigma)
 c(tau0, exp(c(res$summary.hyperpar[2,"mean"], Report$logtau))**.5)
