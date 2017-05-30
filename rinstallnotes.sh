@@ -59,7 +59,7 @@ cd ~/Downloads
  wget --no-check-certificate https://curl.haxx.se/download/curl-7.54.0.tar.gz
  tar xzvf curl-7.54.0.tar.gz
  cd ~/Downloads/curl-7.54.0
- CPPFLAGS="-I$HOME/packages/include/openssl" LDFLAGS="-L$HOME/packages/lib" ./configure --prefix=$HOME/packages
+ CPPFLAGS="-I$HOME/packages/include" LDFLAGS="-L$HOME/packages/lib" ./configure --prefix=$HOME/packages
  make -j3
  make install
 
@@ -67,7 +67,7 @@ cd ~/Downloads
 cd ~/Downloads
  wget http://cran.cnr.berkeley.edu/src/base/R-3/R-3.4.0.tar.gz
  tar -xvzf R-3.4.0.tar.gz
- cd ~/DownlR-3.4.0
+ cd ~/Downloads/R-3.4.0
  mkdir builddir
  cd builddir/
 
