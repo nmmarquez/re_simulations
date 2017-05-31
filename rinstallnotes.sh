@@ -15,7 +15,7 @@ cd ~/Downloads
  wget http://zlib.net/zlib-1.2.11.tar.gz
  tar -xzvf zlib-1.2.11.tar.gz
  cd ~/Downloads/zlib-1.2.11
- ./config --prefix=$HOME/packages
+ ./configure --prefix=$HOME/packages
  make
  make install
 
