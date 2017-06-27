@@ -2,7 +2,7 @@ rm(list=ls())
 output_file <- file("~/Documents/re_simulations/inla/sim2d.Rout", open="wt")
 sink(output_file)
 sink(output_file, type="message")
-pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix)
+pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS)
 set.seed(123)
 # compare the INLA Q matrix vs the by hand to make sure we are on the same page
 # use inla to create the model and make sure results match TMB
@@ -113,7 +113,7 @@ print(system.time(res <- inla(formulae,  data=inla.stack.data(sdat),
                     control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
                     control.family=list(hyper=list(theta=prec.prior)),
                     control.fixed=list(expand.factor.strategy='inla'))))
-
+# 2440(7018.576) seconds run time
 summary(res)
 
 
@@ -122,9 +122,9 @@ setwd("~/Documents/re_simulations/inla/")
 
 # compile the code if not there
 model <- "st"
-#if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
-#if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
-#if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
+if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
+if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
+if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
 compile(paste0(model, ".cpp"))
 
 # set the data
@@ -139,11 +139,17 @@ Params <- list(logtau=0, logsigma=0, logitrho=0, logkappa=0, beta=c(0,0,0),
 # load and optimize
 dyn.load(dynlib(model))
 Obj <- MakeADFun(data=Data, parameters=Params, DLL=model, random="phi")
+runSymbolicAnalysis(Obj)
 print(system.time(Opt <- nlminb(start=Obj$par, objective=Obj$fn,
                                 gradient=Obj$gr,
                                 control=list(eval.max=1e4, iter.max=1e4))))
 # get the estimated values
 Report <- Obj$report()
+system.time(sdrep <- sdreport(Obj, getJointPrecision = T))
+Q <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
+                          row.names(sdrep$jointPrecision) == "phi"]
+
+# 573.485(858.640) + 89.754(247.460) = 663.239(1106.100)
 
 # save the results
 save(list=ls(), file="~/Documents/re_simulations/inla/model_results.Rda")

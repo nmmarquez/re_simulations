@@ -1,11 +1,8 @@
 ### model to comapre different methods of modeling correlated residuals
 ### generalized estimating equations and mixed effects models
 rm(list=ls())
-set.seed(124)
-library(gee)
-library(lme4)
-library(mvtnorm)
-library(ggplot2)
+set.seed(1234)
+pacman::p_load(gee, lme4, mvtnorm, ggplot2)
 
 options(lmerControl=list(check.nobs.vs.rankZ = "warning",
                          check.nobs.vs.nlev = "warning",

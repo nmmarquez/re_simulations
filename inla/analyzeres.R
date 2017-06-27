@@ -41,12 +41,29 @@ c(rho, res$summary.hyperpar[4,"mean"], Report$rho)
 
 inlares <- sapply(1:m, function(i) res$summary.random$i$mean[iset$i.group==i])
 tmbres <- Report$phi
-res <- sapply(1:m, function(i) x_[,i] - mean(x_[,i]))
+trueres <- sapply(1:m, function(i) x_[,i] - mean(x_[,i]))
 
 mean(abs(tmbres - inlares))
-mean(abs(res - inlares))
-mean(abs(tmbres - res))
+mean(abs(trueres - inlares))
+mean(abs(tmbres - trueres))
 
 max(abs(tmbres - inlares))
-max(abs(res - inlares))
-max(abs(tmbres - res))
+max(abs(trueres - inlares))
+max(abs(tmbres - trueres))
+
+Qphi <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
+                             row.names(sdrep$jointPrecision) == "phi"]
+system.time(phi_draws <- inla.qsample(1000, Qphi))
+
+inlavarlist <- lapply(1:m, function(i) 
+    mesh_to_dt(res$summary.random$i$sd[iset$i.group==i], proj, i, "inla"))
+tmbvarlist <- lapply(1:m, function(i)
+    mesh_to_dt(apply(phi_draws[iset$i.group==i,],1,sd), proj, i, "tmb"))
+
+DTvar <- rbindlist(c(inlavarlist, tmbvarlist))
+ggplot(DTvar[obs <=.72 & model=="inla"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
+    scale_fill_gradientn(colors=heat.colors(8))
+ggplot(DTvar[obs <=.15 & model=="tmb"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
+    scale_fill_gradientn(colors=heat.colors(8))

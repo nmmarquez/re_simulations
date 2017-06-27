@@ -83,6 +83,7 @@ Type objective_function<Type>::operator() (){
     REPORT(logtau);
     REPORT(logkappa);
     REPORT(rho);
+    //ADREPORT(phi);
 
     return(nll);
 }
