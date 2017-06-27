@@ -67,3 +67,10 @@ ggplot(DTvar[obs <=.72 & model=="inla"], aes(x, y, z= obs)) + geom_tile(aes(fill
 ggplot(DTvar[obs <=.15 & model=="tmb"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
     theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
     scale_fill_gradientn(colors=heat.colors(8))
+
+ggplot(DTvar[obs & model=="inla"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
+    scale_fill_gradientn(colors=heat.colors(8))
+ggplot(DTvar[obs & model=="tmb"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
+    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
+    scale_fill_gradientn(colors=heat.colors(8))

@@ -112,7 +112,8 @@ prec.prior <- list(prior='pc.prec', param=c(1, 0.01))
 print(system.time(res <- inla(formulae,  data=inla.stack.data(sdat),
                     control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
                     control.family=list(hyper=list(theta=prec.prior)),
-                    control.fixed=list(expand.factor.strategy='inla'))))
+                    control.fixed=list(expand.factor.strategy='inla'),
+                    control.compute=list(config = TRUE))))
 # 2440(7018.576) seconds run time
 summary(res)
 
