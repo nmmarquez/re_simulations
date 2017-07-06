@@ -7,14 +7,15 @@ using Eigen::SparseMatrix;
 // create a sparse precision matrix of an ar1 process
 template<class Type>
 SparseMatrix<Type> ar_Q(int N, Type rho, Type sigma) {
-    SparseMatrix<Type> Q(N,N);
-    Q.insert(0,0) = (1.) / pow(sigma, 2.);
+    SparseMatrix<Type> Q(N,N); // create an N by N matrix
+    Q.insert(0,0) = (1.) / pow(sigma, 2.); // define the top left corner
+    // fill in the diagnol and off diagnol in a loop
     for (size_t n = 1; n < N; n++) {
         Q.insert(n,n) = (1. + pow(rho, 2.)) / pow(sigma, 2.);
         Q.insert(n-1,n) = (-1. * rho) / pow(sigma, 2.);
         Q.insert(n,n-1) = (-1. * rho) / pow(sigma, 2.);
     }
-    Q.coeffRef(N-1,N-1) = (1.) / pow(sigma, 2.);
+    Q.coeffRef(N-1,N-1) = (1.) / pow(sigma, 2.); // define the bottom right corner
     return Q;
 }
 
@@ -22,6 +23,7 @@ SparseMatrix<Type> ar_Q(int N, Type rho, Type sigma) {
 template<class Type>
 matrix<Type> ar_vcov(int N, Type rho, Type sigma) {
     matrix<Type> S(N,N);
+    // the covariance structure is a function of distance from the diagnol
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             S(i,j) = pow(rho, abs(i-j)) * pow(sigma, 2.) / (1-pow(rho, 2.));
@@ -33,11 +35,11 @@ matrix<Type> ar_vcov(int N, Type rho, Type sigma) {
 template<class Type>
 Type objective_function<Type>::operator() (){
     
-    DATA_VECTOR(yobs);
-    DATA_INTEGER(option);
+    DATA_VECTOR(yobs); // time series data
+    DATA_INTEGER(option); // how to estimate the paramters
     
-    PARAMETER(logsigma);
-    PARAMETER(logitrho);
+    PARAMETER(logsigma); // standard deviation of random process
+    PARAMETER(logitrho); // autocorrelation term
     
     Type rho = Type(1.) / (Type(1.) + exp(Type(-1.) * logitrho));
     Type sigma = exp(logsigma);
