@@ -1,6 +1,6 @@
 rm(list=ls())
 pacman::p_load(INLA, ggplot2, data.table, lattice)
-set.seed(123)
+set.seed(124)
 # compare the INLA Q matrix vs the by hand to make sure we are on the same page
 
 plot_mesh_sim <- function(x, proj){
@@ -18,7 +18,7 @@ plot(mesh)
 points(loc[,1], loc[,2], col="red", pch=20)
 proj <- inla.mesh.projector(mesh)
 
-sigma0 <-  .3   ## Standard deviation
+sigma0 <-  .5   ## Standard deviation
 range0 <- 1. ## Spatial range
 kappa0 <- sqrt(8)/range0
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0)
@@ -40,7 +40,8 @@ DT <- data.table(y=y, cov=cov1, id=1:n)
 
 spatform <- y ~ cov1 + f(id, model=spde)
 
-system.time(spatmodel <- inla(spatform, data=DT))
+system.time(spatmodel <- inla(spatform, data=DT,  
+                              control.compute=list(config = TRUE)))
 
 summary(spatmodel)
 spatialhat <- inla.spde2.result(spatmodel, "id", spde)
