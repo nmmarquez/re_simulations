@@ -1,6 +1,7 @@
 #downlaod source
 mkdir ~/Downloads
 mkdir ~/packages
+mkdir ~/software
 
 # install open ssl
 cd ~/Downloads
@@ -25,6 +26,15 @@ export LD_LIBRARY_PATH=$HOME/packages/lib:/usr/lib64:$LD_LIBRARY_PATH
 export CFLAGS="-I$HOME/packages/include" 
 export LDFLAGS="-L$HOME/packages/lib"
 
+# install openblas
+cd ~/Downloads
+ wget http://github.com/xianyi/OpenBLAS/archive/v0.2.19.tar.gz
+ tar -xzvf v0.2.19.tar.gz
+ cd OpenBLAS-0.2.19
+ make
+ make PREFIX=$HOME/software/openblas install
+ 
+
 # install bzip
 cd ~/Downloads
  wget http://www.bzip.org/1.0.6/bzip2-1.0.6.tar.gz
@@ -47,9 +57,9 @@ cd ~/Downloads
 
 # install pcre
 cd ~/Downloads
- wget ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.39.tar.gz
- tar -xzvf pcre-8.39.tar.gz
- cd ~/Downloads/pcre-8.39
+ wget ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/pcre-8.41.tar.gz
+ tar -xzvf pcre-8.41.tar.gz
+ cd ~/Downloads/pcre-8.41
  ./configure --enable-utf8 --prefix=$HOME/packages
  make -j3
  make install
@@ -65,17 +75,30 @@ cd ~/Downloads
 
 # install R
 cd ~/Downloads
- wget http://cran.cnr.berkeley.edu/src/base/R-3/R-3.4.0.tar.gz
- tar -xvzf R-3.4.0.tar.gz
- cd ~/Downloads/R-3.4.0
+ wget http://cran.cnr.berkeley.edu/src/base/R-3/R-3.4.1.tar.gz
+ tar -xvzf R-3.4.1.tar.gz
+ cd ~/Downloads/R-3.4.1
  mkdir builddir
  cd builddir/
 
- ../configure --prefix=$HOME/packages/R-3.4.0 '--with-cairo' \
+ ../configure --prefix=$HOME/packages/R-3.4.1 '--with-cairo' \
   '--with-jpeglib' '--with-readline' '--with-tcltk' \
   '--with-blas' '--with-lapack' '--enable-R-profiling' \
-  '--enable-R-shlib' \
+  '--enable-R-shlib' '--enable-BLAS-shlib' \
   '--enable-memory-profiling'
 
  make
  make install
+
+export PATH=$HOME/packages/R-3.4.1/bin/:$PATH
+
+cd ~/packages/R-3.4.1/lib64/R/lib
+ mv libRblas.so libRblas.so.keep
+ ln -s $HOME/software/openblas/lib/libopenblas.so libRblas.so
+
+cd ~/Downloads
+ git clone https://github.com/kaskr/adcomp.git
+ cd adcomp
+ make install-metis-full
+ 
+
