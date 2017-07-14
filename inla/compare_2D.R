@@ -1,9 +1,23 @@
 rm(list=ls())
-output_file <- file("~/Documents/re_simulations/inla/sim2d.Rout", open="wt")
-sink(output_file)
-sink(output_file, type="message")
-pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS)
-set.seed(123)
+pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS,
+               argparse)
+
+# create parser object
+parser <- ArgumentParser()
+# specify our desired options
+# by default ArgumentParser will add an help option
+parser$add_argument("--sigma", required=TRUE, type="double",
+                    help="Error from spatial process.")
+parser$add_argument("--range", required=TRUE, type="double",
+                    help="Spatial Range")
+parser$add_argument("--rho", required=TRUE, type="double",
+                    help="Temporal Auto-correlation")
+parser$add_argument("--seed", required=TRUE, type="integer",
+                    help="The random seed state of the R process.")
+
+args <- parser$parse_args()
+
+set.seed(args$seed)
 # compare the INLA Q matrix vs the by hand to make sure we are on the same page
 # use inla to create the model and make sure results match TMB
 
@@ -16,66 +30,38 @@ plot_mesh_sim <- function(x, proj){
         lims(y=c(0,1), x=c(0,1)) + scale_fill_gradientn(colors=heat.colors(8))
 }
 
+mesh_to_dt <- function(x, proj, time, model){
+    M <- length(proj$x)
+    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), time=time, 
+                     obs=c(inla.mesh.project(proj, field=x)), model=model)
+    DT
+}
+
 n <- 500 # number of observations on the grid
 m <- 12 # number of time points
 loc <- matrix(runif(n*2), n, 2) # simulate observed points
 mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05)) # create mesh
-jpeg("~/Documents/re_simulations/inla/mesh.jpg")
-par(mfrow=c(1,1))
-plot(mesh)
-points(loc[,1], loc[,2], col="red", pch=20)
-dev.off()
 # project mesh using inla default projection
 proj <- inla.mesh.projector(mesh)
 
-sigma0 <-  .3   # Standard deviation
-range0 <- 1. # Spatial range
+sigma0 <-  round(args$sigma, 2)   # Standard deviation
+range0 <- round(args$range, 2) # Spatial range
 kappa0 <- sqrt(8)/range0 # inla paramter transform
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0) # inla parameter transform
-rho <- .91 # tenporal autocorrelation
+rho <- round(args$rho, 2) # tenporal autocorrelation
 
 spde <- inla.spde2.matern(mesh) # create the spde from the mesh
 
-# parameterize the spde and get the projected precision matrix
-Q1 <- inla.spde2.precision(spde, theta=c(log(tau0), log(kappa0)))
-# calculate the precision matrix by hand in order to make sure you got the
-# process down for TMB
-Q2 <- tau0**2 * (kappa0**4 * spde$param.inla$M0 + 
-                     2 * kappa0**2 *spde$param.inla$M1 + spde$param.inla$M2)
-# Should all be equal
-print(all.equal(Q1, Q2))
-
-# # simulate m sets from the precision matrix had no idea INLA had this!!!
-# x.m <- inla.qsample(n=m, Q1)
-# 
-# # use the janky sim code found here 
-# # http://www.math.ntnu.no/inla/r-inla.org/tutorials/spde/html/
-# x_ <- x.m
-# for (j in 2:m) 
-#     x_[,j] <- rho*x_[,j-1] + sqrt(1-rho^2)*x.m[,j]
+# calculate the precision matrix by hand
+Qgeo <- tau0**2 * (kappa0**4 * spde$param.inla$M0 + 
+                   2 * kappa0**2 *spde$param.inla$M1 + spde$param.inla$M2)
 
 # sim by krnoecker
-Q <- kronecker(Q.AR1(m, 1, rho),
-               inla.spde2.precision(spde, theta=c(log(tau0), log(kappa0))))
+Q <- kronecker(Q.AR1(m, 1, rho), Qgeo)
 x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
 
 # lets only take the observed mesh not the whole set
 x <- x_[mesh$idx$loc,]
-
-# plot using the above websites code
-c100 <- rainbow(101)
-
-jpeg("~/Documents/re_simulations/inla/pointplot.jpg")
-par(mfrow=c(4,3), mar=c(0,0,0,0))
-for (j in 1:m)
-    plot(loc, col=c100[round(100*(x[,j]-min(x[,j]))/diff(range(x[,j])))], 
-         axes=FALSE, asp=1, pch=19, cex=0.5)
-dev.off()
-
-# plot using our use defined code to see the whole surface
-for (j in 1:m){
-   print(plot_mesh_sim(x_[,j], proj) + labs(title=paste0("Time: ", j)))
-}
 
 # lets build up a linear model with dummies to estimate
 table(ccov <- factor(sample(LETTERS[1:3], n*m, replace=TRUE)) )
@@ -109,15 +95,15 @@ formulae <- y ~ 0 + w +
 prec.prior <- list(prior='pc.prec', param=c(1, 0.01))
 
 # Run the inla model and time it
-print(system.time(res <- inla(formulae,  data=inla.stack.data(sdat),
-                    control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
-                    control.family=list(hyper=list(theta=prec.prior)),
-                    control.fixed=list(expand.factor.strategy='inla'),
-                    control.compute=list(config = TRUE),
-                    control.inla=list(int.strategy="eb"))))
-# 2440(7018.576) seconds run time
-summary(res)
-
+start.time <- Sys.time()
+res <- inla(formulae,  data=inla.stack.data(sdat),
+            control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
+            control.family=list(hyper=list(theta=prec.prior)),
+            control.fixed=list(expand.factor.strategy='inla'),
+            control.compute=list(config = TRUE),
+            control.inla=list(int.strategy="eb"))
+end.time <- Sys.time()
+inla.time <- end.time - start.time
 
 # now run the TMB model using ./st.cpp
 setwd("~/Documents/re_simulations/inla/")
@@ -140,6 +126,7 @@ Params <- list(logtau=0, logsigma=0, logitrho=0, logkappa=0, beta=c(0,0,0),
 
 # load and optimize
 dyn.load(dynlib(model))
+start.time <- Sys.time()
 Obj <- MakeADFun(data=Data, parameters=Params, DLL=model, random="phi")
 runSymbolicAnalysis(Obj)
 print(system.time(Opt <- nlminb(start=Obj$par, objective=Obj$fn,
@@ -148,13 +135,17 @@ print(system.time(Opt <- nlminb(start=Obj$par, objective=Obj$fn,
 # get the estimated values
 Report <- Obj$report()
 system.time(sdrep <- sdreport(Obj, getJointPrecision = T))
-Q <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
-                          row.names(sdrep$jointPrecision) == "phi"]
+Qest <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
+                             row.names(sdrep$jointPrecision) == "phi"]
+end.time <- Sys.time()
+tmb.time <- end.time - start.time
 
-# 573.485(858.640) + 89.754(247.460) = 663.239(1106.100)
+datalist <- lapply(1:m, function(i) 
+    mesh_to_dt(x_[,i] - mean(x_), proj, i, "data"))
+inlalist <- lapply(1:m, function(i) 
+    mesh_to_dt(res$summary.random$i$mean[iset$i.group==i], proj, i, "inla"))
+tmblist <- lapply(1:m, function(i) 
+    mesh_to_dt(Report$phi[,i], proj, i, "tmb"))
 
-# save the results
-save(list=ls(), file="~/Documents/re_simulations/inla/model_results.Rda")
 
-sink(type="message")
-sink()
+DT <- rbindlist(c(datalist, inlalist, tmblist))
