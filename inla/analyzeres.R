@@ -55,6 +55,15 @@ system.time(phi_draws <- t(sim.AR(1000, Qphi)) + c(tmbres)) # 40 seconds
 system.time(draws <- inla.posterior.sample(1000, res)) # 400 seconds
 inla_draws <- sapply(1:1000, function(x) 
     draws[[x]]$latent[grepl("i:", row.names(draws[[x]]$latent)), 1])
+inlabdraws <- sapply(1:1000, function(x) draws[[x]]$latent[c("A", "B", "C"),])
+apply(inlabdraws, 1, mean)
+
+VC <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) != "phi", 
+                           row.names(sdrep$jointPrecision) != "phi"]
+tmbfdraws <- t(sim.AR(1000, VC) + c())
+row.names(tmbfdraws) <- row.names(VC)
+apply(tmbfdraws, 1, mean)
+
 
 inla_bounds <- t(apply(inla_draws, 1, quantile, probs=c(.025, .975)))
 tmb_bounds <- t(apply(phi_draws, 1, quantile, probs=c(.025, .975)))
