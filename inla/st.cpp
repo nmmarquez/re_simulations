@@ -80,6 +80,8 @@ Type objective_function<Type>::operator() (){
 
     REPORT(phi);
     REPORT(sigma);
+    REPORT(beta);
+    REPORT(logitrho);
     REPORT(logtau);
     REPORT(logkappa);
     REPORT(rho);
