@@ -78,7 +78,7 @@ for (j in 1:m){
 }
 
 # lets build up a linear model with dummies to estimate
-table(ccov <- factor(sample(LETTERS[1:3], n*m, replace=TRUE)) )
+table(ccov <- factor(sample(LETTERS[1:3], n*m, replace=TRUE)))
 
 beta <- -1:1
 

@@ -79,7 +79,7 @@ Type objective_function<Type>::operator() (){
     printf("%s\n", "likelihood evaluated");
 
     REPORT(phi);
-    REPORT(sigma);
+    REPORT(logsigma);
     REPORT(beta);
     REPORT(logitrho);
     REPORT(logtau);

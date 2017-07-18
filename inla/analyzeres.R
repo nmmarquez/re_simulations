@@ -60,10 +60,12 @@ apply(inlabdraws, 1, mean)
 
 VC <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) != "phi", 
                            row.names(sdrep$jointPrecision) != "phi"]
-tmbfdraws <- t(sim.AR(1000, VC) + c())
+nonbetas <- row.names(VC)[4:nrow(VC)]
+tmbfdraws <- t(sim.AR(1000, VC)) + c(Report$beta, sapply(nonbetas, function(x)
+    Report[[x]]))
 row.names(tmbfdraws) <- row.names(VC)
 apply(tmbfdraws, 1, mean)
-
+apply(tmbfdraws, 1, sd)
 
 inla_bounds <- t(apply(inla_draws, 1, quantile, probs=c(.025, .975)))
 tmb_bounds <- t(apply(phi_draws, 1, quantile, probs=c(.025, .975)))
