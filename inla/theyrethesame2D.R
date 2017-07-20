@@ -28,8 +28,8 @@ dev.off()
 # project mesh using inla default projection
 proj <- inla.mesh.projector(mesh)
 
-sigma0 <-  .3   # Standard deviation
-range0 <- 1. # Spatial range
+sigma0 <-  .1   # Standard deviation
+range0 <- .5 # Spatial range
 kappa0 <- sqrt(8)/range0 # inla paramter transform
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0) # inla parameter transform
 rho <- .91 # tenporal autocorrelation
@@ -55,9 +55,9 @@ print(all.equal(Q1, Q2))
 #     x_[,j] <- rho*x_[,j-1] + sqrt(1-rho^2)*x.m[,j]
 
 # sim by krnoecker
-Q <- kronecker(Q.AR1(m, 1, rho),
-               inla.spde2.precision(spde, theta=c(log(tau0), log(kappa0))))
+Q <- kronecker(Q.AR1(m, 1, rho), Q1)
 x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
+x_ <- x_ - mean(x_)
 
 # lets only take the observed mesh not the whole set
 x <- x_[mesh$idx$loc,]

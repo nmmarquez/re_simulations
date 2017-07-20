@@ -10,7 +10,7 @@ SparseMatrix<Type> spde_Q(Type logkappa, Type logtau, SparseMatrix<Type> M0,
     SparseMatrix<Type> Q;
     Type kappa2 = exp(2. * logkappa);
     Type kappa4 = kappa2*kappa2;
-    Q = exp(logtau) * (kappa4*M0 + Type(2.0)*kappa2*M1 + M2);
+    Q = pow(exp(logtau), 2.)  * (kappa4*M0 + Type(2.0)*kappa2*M1 + M2);
     return Q;
 }
 
