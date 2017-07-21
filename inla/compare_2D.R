@@ -1,3 +1,5 @@
+#!/homes/nmarquez/packages/R-3.4.1/bin/Rscript
+
 rm(list=ls())
 pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS,
                argparse)
