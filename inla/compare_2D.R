@@ -16,6 +16,8 @@ parser$add_argument("--range", required=TRUE, type="double",
                     help="Spatial Range")
 parser$add_argument("--rho", required=TRUE, type="double",
                     help="Temporal Auto-correlation")
+parser$add_argument("-N", required=TRUE, type="int",
+                    help="Number of spatial points.")
 
 args <- parser$parse_args()
 
@@ -26,7 +28,7 @@ mesh_to_dt <- function(x, proj, time, model){
     DT
 }
 
-n <- 500 # number of observations on the grid
+n <- args$N # number of observations on the grid
 m <- 12 # number of time points
 loc <- matrix(runif(n*2), n, 2) # simulate observed points
 mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05)) # create mesh
@@ -242,7 +244,8 @@ inlaquant <- t(apply(inlapreds, 1, quantile, probs=c(.025, .975)))
 (outrmsediff <- outrmseinla - outrmsetmb)
 (outmaddiff <- outmadinla - outmadtmb)
 
-ParList <- list(rho=rho, kappa=kappa0, tau=tau0, sigma=sigma0, range=range0)
+ParList <- list(rho=rho, kappa=kappa0, tau=tau0, sigma=sigma0, range=range0,
+                N=args$N)
 DataList <- list(variance=DTvar, params=DTpars, fixed=DTfixed, latent=DT)
 DataList <- c(ParList, DataList)
 MetaList <- list(inrmsediff, outrmsediff, inmaddiff, outmaddiff, inla.time, tmb.time)
@@ -250,8 +253,10 @@ MetaList <- c(ParList, MetaList)
 
 save_folder <- "/share/scratch/users/nmarquez/sim2dresults/"
 save_file_data <- paste0(save_folder, "sigma_", ParList$sigma, "_range_", 
-                         ParList$range, "_rho_", ParList$rho, "_data.Rda")
+                         ParList$range, "_rho_", ParList$rho, "_N_", ParList$N,
+                         "_data.Rda")
 save_file_meta <- paste0(save_folder, "sigma_", ParList$sigma, "_range_", 
-                         ParList$range, "_rho_", ParList$rho, "_meta.Rda")
+                         ParList$range, "_rho_", ParList$rho, "_N_", ParList$N,
+                         "_meta.Rda")
 save(DataList, file=save_file_data)
-save(DataList, file=save_file_meta)
+save(MetaList, file=save_file_meta)
