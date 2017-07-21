@@ -10,7 +10,7 @@ mesh_to_dt <- function(x, proj, time, model){
 }
 
 datalist <- lapply(1:m, function(i) 
-    mesh_to_dt(x_[,i] - mean(x_), proj, i, "data"))
+    mesh_to_dt(x_[,i], proj, i, "data"))
 inlalist <- lapply(1:m, function(i) 
     mesh_to_dt(res$summary.random$i$mean[iset$i.group==i], proj, i, "inla"))
 tmblist <- lapply(1:m, function(i) 
@@ -19,16 +19,10 @@ tmblist <- lapply(1:m, function(i)
 
 DT <- rbindlist(c(datalist, inlalist, tmblist))
 
-# for(i in 1:m){
-#     print(ggplot(DT[time==i,], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-#           theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_wrap(~model) +
-#           scale_fill_gradientn(colors=heat.colors(8)) +
-#           labs(title=paste0("Time Point: ", i)))
-# }
-
-ggplot(DT[time %in% 1:3,], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-    theme_bw() + lims(y=c(0,1), x=c(0,1)) + facet_grid(model~time) +
-    scale_fill_gradientn(colors=heat.colors(8))
+ggplot(DT[time %in% 1:3 & !is.na(obs)], aes(x, y, z=obs)) + 
+    geom_tile(aes(fill = obs)) + theme(plot.title=element_text(hjust = 0.5)) +
+    facet_grid(model~time) +
+    scale_fill_gradientn(colors=heat.colors(8)) + labs(title="Latent Field")
 
 c(sd.y, 1 / res$summary.hyperpar[1,"mean"]**.5, exp(Report$logsigma))
 c(tau0, exp(res$summary.hyperpar[2,"mean"])**.5, exp(Report$logtau))
@@ -37,20 +31,16 @@ c(rho, res$summary.hyperpar[4,"mean"], Report$rho)
 
 inlares <- sapply(1:m, function(i) res$summary.random$i$mean[iset$i.group==i])
 tmbres <- Report$phi
-trueres <- sapply(1:m, function(i) x_[,i] - mean(x_[,i]))
+trueres <- x_
 
-mean(abs(tmbres - inlares))
-mean(abs(trueres - inlares))
-mean(abs(tmbres - trueres))
-
-max(abs(tmbres - inlares))
-max(abs(trueres - inlares))
-max(abs(tmbres - trueres))
+(modelabsdiff <- mean(abs(tmbres - inlares)))
+(inlabsdiff <- mean(abs(trueres - inlares)))
+(tmbabsdiff <- mean(abs(tmbres - trueres)))
 
 Qphi <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
                              row.names(sdrep$jointPrecision) == "phi"]
 
-#system.time(phi_draws <- inla.qsample(1000, Qphi) + c(tmbres)) # 70 seconds
+
 system.time(phi_draws <- t(sim.AR(1000, Qphi)) + c(tmbres)) # 40 seconds
 system.time(draws <- inla.posterior.sample(1000, res)) # 400 seconds
 inla_draws <- sapply(1:1000, function(x) 
@@ -92,10 +82,15 @@ DTfixed <- rbindlist(list(
                par=rep(paste0("beta", 1:3), 1000), method="INLA"),
     data.table(value=c(hpdraws), draw=rep(1:1000, each=4),
                par=rep(c("sigma", "tau", "kappa", "rho"), 1000), method="INLA")))
+   
+DTpars <- data.table(value=c(sd.y, tau0, kappa0, rho, -1:1),
+                     par=c("sigma", "tau", "kappa", "rho", paste0("beta", 1:3)))
+
 
 
 ggplot(data=DTfixed, aes(x=value, fill=method, group=method)) + 
-    geom_density(alpha=.6) + facet_wrap(~par, scales="free")
+    geom_density(alpha=.6) +  geom_vline(aes(xintercept=value), data=DTpars) + 
+    facet_wrap(~par, scales="free")
 ggplot(data=DTfixed[par=="kappa"], aes(x=value, fill=method, group=method)) + 
     geom_density()
 ggplot(data=DTfixed[par=="beta1"], aes(x=value, fill=method, group=method)) + 
@@ -125,16 +120,10 @@ tmbvarlist <- lapply(1:m, function(i)
     mesh_to_dt(apply(phi_draws[iset$i.group==i,],1,sd), proj, i, "tmb"))
 
 DTvar <- rbindlist(c(inlavarlist, tmbvarlist))
-ggplot(DTvar[obs <=.72 & model=="inla"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
-    scale_fill_gradientn(colors=heat.colors(8))
-ggplot(DTvar[obs <=.15 & model=="tmb"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
-    scale_fill_gradientn(colors=heat.colors(8))
 
-ggplot(DTvar[obs & model=="inla"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
-    scale_fill_gradientn(colors=heat.colors(8))
-ggplot(DTvar[obs & model=="tmb"], aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + 
-    theme_bw() + lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_wrap(~time) +
-    scale_fill_gradientn(colors=heat.colors(8))
+ggplot(DTvar[time %in% 1:3 & !is.na(obs)], aes(x, y, z= obs)) + 
+    geom_tile(aes(fill = obs)) + theme(plot.title=element_text(hjust = 0.5)) + 
+    lims(y=c(-.15,1.15), x=c(-.15,1.15)) + facet_grid(model~time) +
+    scale_fill_gradientn(colors=rev(terrain.colors(8))) + 
+    labs(title="Variance Estimates")
+

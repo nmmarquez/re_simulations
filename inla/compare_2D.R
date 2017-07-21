@@ -1,6 +1,8 @@
 rm(list=ls())
 pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS,
                argparse)
+inla.dynload.workaround()
+set.seed(123)
 
 # create parser object
 parser <- ArgumentParser()
@@ -12,23 +14,8 @@ parser$add_argument("--range", required=TRUE, type="double",
                     help="Spatial Range")
 parser$add_argument("--rho", required=TRUE, type="double",
                     help="Temporal Auto-correlation")
-parser$add_argument("--seed", required=TRUE, type="integer",
-                    help="The random seed state of the R process.")
 
 args <- parser$parse_args()
-
-set.seed(args$seed)
-# compare the INLA Q matrix vs the by hand to make sure we are on the same page
-# use inla to create the model and make sure results match TMB
-
-# plotting utility function
-plot_mesh_sim <- function(x, proj){
-    M <- length(proj$x)
-    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), 
-                     obs=c(inla.mesh.project(proj, field=x)))
-    ggplot(DT, aes(x, y, z= obs)) + geom_tile(aes(fill = obs)) + theme_bw() + 
-        lims(y=c(0,1), x=c(0,1)) + scale_fill_gradientn(colors=heat.colors(8))
-}
 
 mesh_to_dt <- function(x, proj, time, model){
     M <- length(proj$x)
@@ -59,6 +46,7 @@ Qgeo <- tau0**2 * (kappa0**4 * spde$param.inla$M0 +
 # sim by krnoecker
 Q <- kronecker(Q.AR1(m, 1, rho), Qgeo)
 x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
+x_ <- x_ - mean(x_)
 
 # lets only take the observed mesh not the whole set
 x <- x_[mesh$idx$loc,]
@@ -95,6 +83,7 @@ formulae <- y ~ 0 + w +
 prec.prior <- list(prior='pc.prec', param=c(1, 0.01))
 
 # Run the inla model and time it
+inla.setOption(num.threads=10) 
 start.time <- Sys.time()
 res <- inla(formulae,  data=inla.stack.data(sdat),
             control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
@@ -122,7 +111,7 @@ Data <- list(y=dat$y, T=m, geo=dat$geo, temporal=dat$time,
 
 # set the param starting points
 Params <- list(logtau=0, logsigma=0, logitrho=0, logkappa=0, beta=c(0,0,0),
-               phi=array(0, dim=c(nrow(Q1),m)))
+               phi=array(0, dim=c(nrow(Qgeo),m)))
 
 # load and optimize
 dyn.load(dynlib(model))
@@ -149,3 +138,96 @@ tmblist <- lapply(1:m, function(i)
 
 
 DT <- rbindlist(c(datalist, inlalist, tmblist))
+
+inlares <- sapply(1:m, function(i) res$summary.random$i$mean[iset$i.group==i])
+tmbres <- Report$phi
+trueres <- x_
+
+(modelabsdiff <- mean(abs(tmbres - inlares)))
+(inlabsdiff <- mean(abs(trueres - inlares)))
+(tmbabsdiff <- mean(abs(tmbres - trueres)))
+
+Qphi <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
+                             row.names(sdrep$jointPrecision) == "phi"]
+
+
+system.time(phi_draws <- t(sim.AR(1000, Qphi)) + c(tmbres)) # 40 seconds
+system.time(draws <- inla.posterior.sample(1000, res)) # 400 seconds
+inla_draws <- sapply(1:1000, function(x) 
+    draws[[x]]$latent[grepl("i:", row.names(draws[[x]]$latent)), 1])
+inlabdraws <- sapply(1:1000, function(x) draws[[x]]$latent[c("A", "B", "C"),])
+apply(inlabdraws, 1, mean)
+
+VC <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) != "phi", 
+                           row.names(sdrep$jointPrecision) != "phi"]
+nonbetas <- row.names(VC)[4:nrow(VC)]
+tmbfdraws <- t(sim.AR(1000, VC)) + c(Report$beta, sapply(nonbetas, function(x)
+    Report[[x]]))
+row.names(tmbfdraws) <- row.names(VC)
+# exp rows
+tvec <- c(beta="beta", logtau="tau", logkappa="kappa", 
+          logitrho="rho", logsigma="sigma")
+
+for(r in c("logtau", "logkappa", "logsigma")){
+    tmbfdraws[r,] <- exp(tmbfdraws[r,])
+}
+
+for(r in c("logitrho")){
+    tmbfdraws[r,] <- expit(tmbfdraws[r,])
+}
+
+row.names(tmbfdraws) <- tvec[row.names(tmbfdraws)]
+row.names(tmbfdraws)[1:3] <- paste0("beta", 1:3)
+
+hpdraws <- t(mapply(function(x,y) rnorm(1000, x, y), summary(res)$hyperpar$mean, 
+                    summary(res)$hyperpar$sd))
+hpdraws[1,] <- 1/hpdraws[1,]**.5
+hpdraws[2,] <- exp(hpdraws[2,])**.5
+hpdraws[3,] <- exp(hpdraws[3,])
+
+DTfixed <- rbindlist(list(
+    data.table(value=c(tmbfdraws), draw=rep(1:1000, each=nrow(tmbfdraws)),
+               par=rep(row.names(tmbfdraws), 1000), method="TMB"),
+    data.table(value=c(inlabdraws), draw=rep(1:1000, each=3), 
+               par=rep(paste0("beta", 1:3), 1000), method="INLA"),
+    data.table(value=c(hpdraws), draw=rep(1:1000, each=4),
+               par=rep(c("sigma", "tau", "kappa", "rho"), 1000), method="INLA")))
+
+DTpars <- data.table(value=c(sd.y, tau0, kappa0, rho, -1:1),
+                     par=c("sigma", "tau", "kappa", "rho", paste0("beta", 1:3)))
+
+
+inlavarlist <- lapply(1:m, function(i)
+    mesh_to_dt(res$summary.random$i$sd[iset$i.group==i], proj, i, "inla"))
+tmbvarlist <- lapply(1:m, function(i)
+    mesh_to_dt(apply(phi_draws[iset$i.group==i,],1,sd), proj, i, "tmb"))
+
+DTvar <- rbindlist(c(inlavarlist, tmbvarlist))
+
+noise <- t(sapply(1:(n*m), function(x) rnorm(1000, 0, exp(Report$logsigma))))
+
+tmbpreds <- phi_draws[rep(1:mesh$n %in% mesh$idx$loc, m),] + 
+    sapply(c("A", "B", "C"), function(a) as.integer(a == ccov)) %*% tmbfdraws[1:3,] +
+    t(sapply(1:(n*m), function(x) rnorm(1000, 0, exp(Report$logsigma))))
+
+inlapreds <- inla_draws[rep(1:mesh$n %in% mesh$idx$loc, m),] + 
+    sapply(c("A", "B", "C"), function(a) as.integer(a == ccov)) %*% inlabdraws +
+    t(sapply(1:(n*m), function(x) 
+        rnorm(1000, 0, (res$summary.hyperpar[1,"mean"])**-.5)))
+
+summary(apply(tmbpreds, 1, mean))
+summary(apply(inlapreds, 1, mean))
+mean(abs(apply(inlapreds,1, mean) - apply(tmbpreds, 1, mean)))
+
+summary(dat$y)
+
+tmbquant <- t(apply(tmbpreds, 1, quantile, probs=c(.025, .975)))
+inlaquant <- t(apply(inlapreds, 1, quantile, probs=c(.025, .975)))
+
+# in sample
+incovtmb <- mean((c(y)[isel] >= tmbquant[isel,1]) & (c(y)[isel] <= tmbquant[isel,2]))
+incovinla <- mean((c(y)[isel] >= inlaquant[isel,1]) & (c(y)[isel] <= inlaquant[isel,2]))
+
+# out of sample
+outcovtmb <- mean((c(y)[-isel] >= tmbquant[-isel,1]) & (c(y)[-isel] <= tmbquant[-isel,2]))
+outcovinla <- mean((c(y)[-isel] >= inlaquant[-isel,1]) & (c(y)[-isel] <= inlaquant[-isel,2]))
