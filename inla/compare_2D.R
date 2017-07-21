@@ -1,7 +1,7 @@
 rm(list=ls())
 pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS,
                argparse)
-inla.dynload.workaround()
+INLA::inla.dynload.workaround()
 set.seed(123)
 
 # create parser object
@@ -150,13 +150,11 @@ trueres <- x_
 Qphi <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi", 
                              row.names(sdrep$jointPrecision) == "phi"]
 
-
 system.time(phi_draws <- t(sim.AR(1000, Qphi)) + c(tmbres)) # 40 seconds
-system.time(draws <- inla.posterior.sample(1000, res)) # 400 seconds
+system.time(draws <- inla.posterior.sample(1000, res)) # 76 seconds
 inla_draws <- sapply(1:1000, function(x) 
     draws[[x]]$latent[grepl("i:", row.names(draws[[x]]$latent)), 1])
 inlabdraws <- sapply(1:1000, function(x) draws[[x]]$latent[c("A", "B", "C"),])
-apply(inlabdraws, 1, mean)
 
 VC <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) != "phi", 
                            row.names(sdrep$jointPrecision) != "phi"]
@@ -204,8 +202,6 @@ tmbvarlist <- lapply(1:m, function(i)
 
 DTvar <- rbindlist(c(inlavarlist, tmbvarlist))
 
-noise <- t(sapply(1:(n*m), function(x) rnorm(1000, 0, exp(Report$logsigma))))
-
 tmbpreds <- phi_draws[rep(1:mesh$n %in% mesh$idx$loc, m),] + 
     sapply(c("A", "B", "C"), function(a) as.integer(a == ccov)) %*% tmbfdraws[1:3,] +
     t(sapply(1:(n*m), function(x) rnorm(1000, 0, exp(Report$logsigma))))
@@ -219,15 +215,41 @@ summary(apply(tmbpreds, 1, mean))
 summary(apply(inlapreds, 1, mean))
 mean(abs(apply(inlapreds,1, mean) - apply(tmbpreds, 1, mean)))
 
-summary(dat$y)
 
 tmbquant <- t(apply(tmbpreds, 1, quantile, probs=c(.025, .975)))
 inlaquant <- t(apply(inlapreds, 1, quantile, probs=c(.025, .975)))
 
 # in sample
-incovtmb <- mean((c(y)[isel] >= tmbquant[isel,1]) & (c(y)[isel] <= tmbquant[isel,2]))
-incovinla <- mean((c(y)[isel] >= inlaquant[isel,1]) & (c(y)[isel] <= inlaquant[isel,2]))
+(incovtmb <- mean((c(y)[isel] >= tmbquant[isel,1]) & (c(y)[isel] <= tmbquant[isel,2])))
+(incovinla <- mean((c(y)[isel] >= inlaquant[isel,1]) & (c(y)[isel] <= inlaquant[isel,2])))
+(inrmsetmb <- mean((c(y)[isel] - apply(tmbpreds, 1, mean)[isel])**2)**.5)
+(inrmseinla <- mean((c(y)[isel] - apply(inlapreds, 1, mean)[isel])**2)**.5)
+(inmadtmb <- median(abs(c(y)[isel] - apply(tmbpreds, 1, mean)[isel])))
+(inmadinla <- median(abs(c(y)[isel] - apply(inlapreds, 1, mean)[isel])))
+(inrmsediff <- inrmseinla - inrmsetmb)
+(inmaddiff <- inmadinla - inmadtmb)
+
 
 # out of sample
-outcovtmb <- mean((c(y)[-isel] >= tmbquant[-isel,1]) & (c(y)[-isel] <= tmbquant[-isel,2]))
-outcovinla <- mean((c(y)[-isel] >= inlaquant[-isel,1]) & (c(y)[-isel] <= inlaquant[-isel,2]))
+(outcovtmb <- mean((c(y)[-isel] >= tmbquant[-isel,1]) & (c(y)[-isel] <= tmbquant[-isel,2])))
+(outcovinla <- mean((c(y)[-isel] >= inlaquant[-isel,1]) & (c(y)[-isel] <= inlaquant[-isel,2])))
+(outrmsetmb <- mean((c(y)[-isel] - apply(tmbpreds, 1, mean)[-isel])**2)**.5)
+(outrmseinla <- mean((c(y)[-isel] - apply(inlapreds, 1, mean)[-isel])**2)**.5)
+(outmadtmb <- median(abs(c(y)[-isel] - apply(tmbpreds, 1, mean)[-isel])))
+(outmadinla <- median(abs(c(y)[-isel] - apply(inlapreds, 1, mean)[-isel])))
+(outrmsediff <- outrmseinla - outrmsetmb)
+(outmaddiff <- outmadinla - outmadtmb)
+
+ParList <- list(rho=rho, kappa=kappa0, tau=tau0, sigma=sigma0, range=range0)
+DataList <- list(variance=DTvar, params=DTpars, fixed=DTfixed, latent=DT)
+DataList <- c(ParList, DataList)
+MetaList <- list(inrmsediff, outrmsediff, inmaddiff, outmaddiff, inla.time, tmb.time)
+MetaList <- c(ParList, MetaList)
+
+save_folder <- "/share/scratch/users/nmarquez/sim2dresults/"
+save_file_data <- paste0(save_folder, "sigma_", ParList$sigma, "_range_", 
+                         ParList$range, "_rho_", ParList$rho, "_data.Rda")
+save_file_meta <- paste0(save_folder, "sigma_", ParList$sigma, "_range_", 
+                         ParList$range, "_rho_", ParList$rho, "_meta.Rda")
+save(DataList, file=save_file_data)
+save(DataList, file=save_file_meta)
