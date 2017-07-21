@@ -1,9 +1,9 @@
 #!/homes/nmarquez/packages/R-3.4.1/bin/Rscript
 
 rm(list=ls())
+INLA:::inla.dynload.workaround()
 pacman::p_load(INLA, ggplot2, data.table, lattice, TMB, ar.matrix, MASS,
-               argparse)
-INLA::inla.dynload.workaround()
+               argparse, clusterPower)
 set.seed(123)
 
 # create parser object
@@ -16,7 +16,7 @@ parser$add_argument("--range", required=TRUE, type="double",
                     help="Spatial Range")
 parser$add_argument("--rho", required=TRUE, type="double",
                     help="Temporal Auto-correlation")
-parser$add_argument("-N", required=TRUE, type="int",
+parser$add_argument("-N", required=TRUE, type="integer",
                     help="Number of spatial points.")
 
 args <- parser$parse_args()
