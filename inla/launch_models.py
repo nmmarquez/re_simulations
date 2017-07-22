@@ -15,13 +15,13 @@ def main():
     execf_ = os.path.join(file_dir, "compare_2D.R")
     qsub_template = (
             "qsub -b y -pe multi_slot 10 -now no -P proj_forecasting "
-            "-N {r}{s}{p}{n} {exec_file} --rho {p} -N {n} --sigma {s} --range {r}"
+            "-N {r}{s}{p}{n} {e} --rho {p} -N {n} --sigma {s} --range {r}"
             )
     for p in rhos:
         for s in sigmas:
             for r in ranges:
                 for n in Ns:
-                    qsub = qsub_template.format(n=n, r=r, s=s, p=p)
+                    qsub = qsub_template.format(n=n, r=r, s=s, p=p, e=execf_)
                     print qsub
                     os.popen(qsub)
 
