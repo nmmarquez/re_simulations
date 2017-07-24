@@ -109,6 +109,8 @@ res <- inla(formulae,  data=inla.stack.data(sdat),
 end.time <- Sys.time()
 inla.time <- end.time - start.time
 
+print(summary(res))
+
 # now run the TMB model using ./st.cpp
 setwd("~/Documents/re_simulations/inla/")
 
@@ -143,6 +145,9 @@ Qest <- sdrep$jointPrecision[row.names(sdrep$jointPrecision) == "phi",
                              row.names(sdrep$jointPrecision) == "phi"]
 end.time <- Sys.time()
 tmb.time <- end.time - start.time
+
+print("Convergence code for TMB.")
+print(Obj$convergence)
 
 datalist <- lapply(1:m, function(i)
     mesh_to_dt(x_[,i] - mean(x_), proj, i, "data"))
