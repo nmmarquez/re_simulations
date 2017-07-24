@@ -2,7 +2,7 @@ library(ggplot2)
 library(data.table)
 
 load_data <- function(sigma, range, rho, N){
-    save_folder <- "/share/scratch/users/nmarquez/sim2dresults/"
+    save_folder <- "/home/j/temp/nmarquez/sim2dresults/"
     save_file_data <- paste0(save_folder, "sigma_", sigma, "_range_", range, 
                              "_rho_", rho, "_N_", N, "_data.Rda")
     load(save_file_data)
