@@ -3,7 +3,7 @@ source("./utilities.R")
 
 shinyServer(function(input,output){
     output$latent <- renderPlot({
-        if(input$type == "mean"){
+        if(input$type == "Mean"){
             res <-plot_latent(input$sigma, input$range, input$rho, input$size)
         }
         else{

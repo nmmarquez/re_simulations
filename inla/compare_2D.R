@@ -28,6 +28,7 @@ mesh_to_dt <- function(x, proj, time, model){
     DT
 }
 
+
 n <- args$N # number of observations on the grid
 m <- 12 # number of time points
 loc <- matrix(runif(n*2), n, 2) # simulate observed points
@@ -40,6 +41,16 @@ range0 <- round(args$range, 2) # Spatial range
 kappa0 <- sqrt(8)/range0 # inla paramter transform
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0) # inla parameter transform
 rho <- round(args$rho, 2) # tenporal autocorrelation
+
+ParList <- list(rho=rho, kappa=kappa0, tau=tau0, sigma=sigma0, range=range0,
+                N=args$N)
+save_folder <- "/home/j/temp/nmarquez/sim2dresults/"
+outf <- paste0(save_folder, "sigma_", ParList$sigma, "_range_",
+               ParList$range, "_rho_", ParList$rho, "_N_", ParList$N,
+               "_summary.Rout")
+output_file <- file(outf, open="wt")
+sink(output_file)
+sink(output_file, type="message")
 
 spde <- inla.spde2.matern(mesh) # create the spde from the mesh
 
@@ -244,14 +255,14 @@ inlaquant <- t(apply(inlapreds, 1, quantile, probs=c(.025, .975)))
 (outrmsediff <- outrmseinla - outrmsetmb)
 (outmaddiff <- outmadinla - outmadtmb)
 
-ParList <- list(rho=rho, kappa=kappa0, tau=tau0, sigma=sigma0, range=range0,
-                N=args$N)
 DataList <- list(variance=DTvar, params=DTpars, fixed=DTfixed, latent=DT)
 DataList <- c(ParList, DataList)
-MetaList <- list(inrmsediff, outrmsediff, inmaddiff, outmaddiff, inla.time, tmb.time)
+MetaList <- list(inrmsediff=inrmsediff, outrmsediff=outrmsediff, 
+                 inmaddiff=inmaddiff, outmaddiff=outmaddiff, 
+                 inla.time=inla.time, tmb.time=tmb.time, outcovtmb=outcovtmb,
+                 incovtmb=incovtmb)
 MetaList <- c(ParList, MetaList)
 
-save_folder <- "/share/scratch/users/nmarquez/sim2dresults/"
 save_file_data <- paste0(save_folder, "sigma_", ParList$sigma, "_range_",
                          ParList$range, "_rho_", ParList$rho, "_N_", ParList$N,
                          "_data.Rda")
@@ -260,3 +271,6 @@ save_file_meta <- paste0(save_folder, "sigma_", ParList$sigma, "_range_",
                          "_meta.Rda")
 save(DataList, file=save_file_data)
 save(MetaList, file=save_file_meta)
+
+sink()
+sink(type="message")

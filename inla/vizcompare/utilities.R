@@ -6,6 +6,7 @@ load_data <- function(sigma, range, rho, N){
     save_file_data <- paste0(save_folder, "sigma_", sigma, "_range_", range, 
                              "_rho_", rho, "_N_", N, "_data.Rda")
     load(save_file_data)
+    DataList
 }
 
 
@@ -22,8 +23,8 @@ plot_var <- function(sigma, range, rho, N){
     load_data(sigma, range, rho, N)
     ggplot(DataList$variance[time %in% 1:3 & !is.na(obs)], aes(x, y, z= obs)) + 
         geom_tile(aes(fill=obs)) + theme(plot.title=element_text(hjust=0.5)) + 
-        facet_grid(model~time) + labs(title="Variance Estimates")
-        scale_fill_gradientn(colors=rev(terrain.colors(8)))
+        facet_grid(model~time) + labs(title="Variance Estimates") +
+        setClass("Class", slots = c(name = "type"))
 }
 
 plot_params <- function(sigma, range, rho, N){
