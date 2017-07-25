@@ -61,7 +61,7 @@ Type objective_function<Type>::operator() (){
 
     vector<Type> yhat(N);
 
-    Type nll = 0.;
+    parallel_accumulator<Type> nll(this);
 
     nll += SEPARABLE(GMRF(Q_time), GMRF(Q_loc))(phi);
 
