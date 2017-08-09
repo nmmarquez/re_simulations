@@ -98,7 +98,7 @@ formulae <- y ~ 0 + w +
 prec.prior <- list(prior='pc.prec', param=c(1, 0.01))
 
 # Run the inla model and time it
-inla.setOption(num.threads=4) 
+inla.setOption(num.threads=4)
 start.time <- Sys.time()
 res <- inla(formulae,  data=inla.stack.data(sdat),
             control.predictor=list(compute=TRUE, A=inla.stack.A(sdat)),
@@ -115,6 +115,7 @@ print(summary(res))
 setwd("~/Documents/re_simulations/inla/")
 
 # compile the code if not there
+openmp(4)
 model <- "st"
 if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
 if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
@@ -262,10 +263,10 @@ inlaquant <- t(apply(inlapreds, 1, quantile, probs=c(.025, .975)))
 
 DataList <- list(variance=DTvar, params=DTpars, fixed=DTfixed, latent=DT)
 DataList <- c(ParList, DataList)
-MetaList <- list(inrmsediff=inrmsediff, outrmsediff=outrmsediff, 
-                 inmaddiff=inmaddiff, outmaddiff=outmaddiff, 
+MetaList <- list(inrmsediff=inrmsediff, outrmsediff=outrmsediff,
+                 inmaddiff=inmaddiff, outmaddiff=outmaddiff,
                  inla.time=inla.time, tmb.time=tmb.time, outcovtmb=outcovtmb,
-                 incovtmb=incovtmb)
+                 incovtmb=incovtmb, outcovinla=outcovinla, incovinla=incovinla)
 MetaList <- c(ParList, MetaList)
 
 save_file_data <- paste0(save_folder, "sigma_", ParList$sigma, "_range_",
