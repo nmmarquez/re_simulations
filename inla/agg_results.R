@@ -20,16 +20,37 @@ DT[,diff.time:=inla.time-tmb.time]
 DT[,ratio.time:= as.numeric(inla.time) / as.numeric(tmb.time)]
 DT[,N:=as.factor(N)]
 
+jpeg("~/Desktop/inla_tmb_time_diff.jpg", width = 960, height = 960)
 ggplot(DT, aes(x=diff.time, fill=N, group=N)) + geom_density(alpha=.4) +
     geom_vline(xintercept=0) + xlab("INLA time - TMB time(minutes)")
+dev.off()
 
-ggplot(DT[sigma!=.1], aes(x=ratio.time, fill=N, group=N)) +
+jpeg("~/Desktop/inla_tmb_time_ratio.jpg", width = 960, height = 960)
+ggplot(DT, aes(x=ratio.time, fill=N, group=N)) +
     geom_density(alpha=.4) + geom_vline(xintercept=1) +
-    xlab("INLA time / TMB time(minutes)") + facet_wrap(~sigma)
+    xlab("INLA time / TMB time(minutes)") 
+dev.off()
 
+jpeg("~/Desktop/inla_tmb_time_ratio_kappa.jpg", width = 960, height = 960)
+ggplot(DT[kappa < 5 | kappa > 6], aes(x=ratio.time, fill=N, group=N)) +
+    geom_density(alpha=.4) + geom_vline(xintercept=1) +
+    xlab("INLA time / TMB time(minutes)") + facet_wrap(~kappa)
+dev.off()
+
+jpeg("~/Desktop/rmse_diff.jpg", width = 960, height = 960)
 ggplot(DT[outrmsediff > -.1], aes(x=outrmsediff, fill=N, group=N)) +
     geom_density(alpha=.4) + xlab("") +
     labs(title="RMSE Difference(INLA-TMB)")
+dev.off()
+
+jpeg("~/Desktop/maddiff.jpg", width = 960, height = 960)
 ggplot(DT[outmaddiff > -.1], aes(x=outmaddiff, fill=N, group=N)) +
     geom_density(alpha=.4) + xlab("") +
     labs(title="MAD Difference(INLA-TMB)")
+dev.off()
+
+jpeg("~/Desktop/time_diff_point.jpg", width = 960, height = 960)
+ggplot(DT, aes(x=inla.time, y=tmb.time)) + geom_point(alpha=.4) + 
+    facet_wrap(~N) + geom_abline(intercept=0, slope=1) +
+    labs(title="Time Comparison By Sample Size")
+dev.off()
