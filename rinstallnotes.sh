@@ -3,6 +3,20 @@ mkdir ~/Downloads
 mkdir ~/packages
 mkdir ~/software
 
+# latest and greatest g++
+cd ~/Downloads
+ wget http://www.netgull.com/gcc/releases/gcc-7.2.0/gcc-7.2.0.tar.gz
+ tar xzf gcc-7.2.0.tar.gz
+ cd gcc-7.2.0
+ ./contrib/download_prerequisites
+ mkdir objdir
+ cd objdir
+ $HOME/Downloads/gcc-7.2.0/configure --prefix=$HOME/packages/gcc-7.2.0 --enable-languages=c,c++,fortran,go\
+  --disable-multilib
+ make -j 4
+ make intsall
+
+
 # install open ssl
 cd ~/Downloads
  git clone https://github.com/openssl/openssl.git
@@ -100,5 +114,4 @@ cd ~/Downloads
  git clone https://github.com/kaskr/adcomp.git
  cd adcomp
  make install-metis-full
- 
 
