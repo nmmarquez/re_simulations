@@ -73,9 +73,19 @@ for (j in 1:m)
 dev.off()
 
 # plot using our use defined code to see the whole surface
-for (j in 1:m){
-   print(plot_mesh_sim(x_[,j], proj) + labs(title=paste0("Time: ", j)))
-}
+ggplot(rbindlist(lapply(1:m, function(j){
+    print(plot_mesh_sim(x_[,j], proj) + labs(title=paste0("Time: ", j)))
+    M <- length(proj$x)
+    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), 
+                     obs=c(inla.mesh.project(proj, field=x_[,j])),
+                     time=j)})),
+    aes(x, y, z = obs)) + 
+    geom_raster(aes(fill = obs)) + 
+    theme_void() + 
+    lims(y=c(0,1), x=c(0,1)) +
+    scale_fill_gradientn(colors=heat.colors(8)) +
+    facet_wrap(~time)
+
 
 # lets build up a linear model with dummies to estimate
 table(ccov <- factor(sample(LETTERS[1:3], n*m, replace=TRUE)))
