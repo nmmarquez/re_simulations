@@ -13,9 +13,10 @@ mesh2DF <- function(x){
 n <- 1000
 loc <- matrix(runif(n*2), n, 2)
 mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05))
+
 plot(mesh)
 points(loc[,1], loc[,2], col="red", pch=20)
-proj <- inla.mesh.projector(mesh)
+proj <- inla.mesh.projector(mesh, dims=c(500, 500))
 
 sigma0 <-  .2   ## Standard deviation
 range0 <- 1. ## Spatial range
@@ -61,13 +62,13 @@ summary(spatmodel)
 spatialhat <- inla.spde2.result(spatmodel, "id", spde)
 xhat <- spatialhat$summary.values$`0.5quant`
 bind_rows(
-    mutate(mesh2DF(x), state="Observed"), 
-    mutate(mesh2DF(xhat), state="Estimated INLA")) %>%
+    mutate(mesh2DF(x), state="Observed"),
+    mutate(mesh2DF(xhat), state="Estimated TMB")) %>%
     ggplot(aes(x, y, z=obs)) +
-    geom_raster(aes(fill = obs)) + 
-    theme_void() + 
-    lims(y=c(0,1), x=c(0,1)) + 
-    scale_fill_gradientn(colors=heat.colors(8)) +
+    geom_raster(aes(fill = obs)) +
+    theme_void() +
+    lims(y=c(0,1), x=c(0,1)) +
+    scale_fill_distiller(palette = "Spectral") +
     facet_wrap(~state)
 
 exp(spatmodel$summary.hyperpar$mean[1:2])
@@ -105,18 +106,18 @@ runModel <- function(DT, recompile=FALSE, symbolic=TRUE){
         gradient=Obj$gr,
         control=list(eval.max=1e4, iter.max=1e4))
     Report <- Obj$report()
-    list(obj=Obj, opt=Opt, report=Report)
+    list(obj=Obj, opt=Opt, report=Report) 
 }
 
 system.time(tmbModel <- runModel(DT))
 system.time(runModel(DT, symbolic=F))
 
 bind_rows(
-    mutate(mesh2DF(x), state="Observed"), 
+    mutate(mesh2DF(x), state="Observed"),
     mutate(mesh2DF(tmbModel$report$z), state="Estimated TMB")) %>%
     ggplot(aes(x, y, z=obs)) +
-    geom_raster(aes(fill = obs)) + 
-    theme_void() + 
-    lims(y=c(0,1), x=c(0,1)) + 
-    scale_fill_gradientn(colors=heat.colors(8)) +
+    geom_raster(aes(fill = obs)) +
+    theme_void() +
+    lims(y=c(0,1), x=c(0,1)) +
+    scale_fill_distiller(palette = "Spectral") +
     facet_wrap(~state)
