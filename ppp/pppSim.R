@@ -11,23 +11,46 @@ mesh2DF <- function(x){
 
 # what is the shape that we are dealing with?
 US.df$id <- row.names(US.df@data)
-USDF <- fortify(US.df, region="id")
+USDF <- fortify(US.df, region="id") %>%
+    left_join(US.df@data, by="id")
 plot(US.df)
 
 randomSPDF <- spsample(US.df, 800, "random")
 
-points(randomSPDF, pch=20, col="red", cex=.5)
+USDF %>%
+    ggplot +
+    aes(long,lat,group=group) + 
+    geom_path(color="black", size=.1) +
+    coord_equal() + 
+    theme_void() +
+    geom_point(
+        aes(x, y, group=NULL), 
+        data=as.data.table(randomSPDF@coords),
+        color="red",
+        size=.5)
 
 west <- c(
     "El Paso", "Hudspeth", "Culberson", "Reeves", "Pecos", "Terrell", 
     "Jeff Davis", "Presidio", "Brewster")
 
-plot(US.df[US.df$NAME %in% west,])
-
 # check which points fall in west coast
 
 randomSPDF$west <- over(randomSPDF, US.df)$NAME %in% west
-points(randomSPDF[randomSPDF$west,], pch=20, col="red", cex=.5)
+randomSPDF$long <- randomSPDF@coords[,1]
+randomSPDF$lat <- randomSPDF@coords[,2]
+
+USDF %>%
+    filter(NAME %in% west) %>%
+    ggplot +
+    aes(long,lat,group=group) + 
+    geom_path(color="black", size=.1) +
+    coord_equal() + 
+    theme_void() +
+    geom_point(
+        aes(long, lat, group=NULL), 
+        data=subset(randomSPDF@data, west),
+        color="red",
+        size=.5)
 
 mesh <- inla.mesh.create(randomSPDF, refine=list(max.edge=1))
 proj <- inla.mesh.projector(mesh, dims=c(400, 400))
@@ -77,7 +100,7 @@ simValues %>%
     ggplot +
     aes(long,lat,group=group,fill=obs) + 
     geom_polygon() +
-    geom_path(color="black") +
+    geom_path(color="black", size=.1) +
     coord_equal() + 
     theme_void() +
     scale_fill_distiller(palette = "Spectral")
