@@ -52,7 +52,11 @@ USDF %>%
         color="red",
         size=.5)
 
-mesh <- inla.mesh.create(randomSPDF, refine=list(max.edge=1))
+plot(mesh <- inla.mesh.2d(
+    randomSPDF, 
+    cutoff=.3,
+    max.edge=c(50, 500)))
+points(randomSPDF, col="red", pch=21, cex=.3)
 proj <- inla.mesh.projector(mesh, dims=c(400, 400))
 
 sigma0 <-  .2   ## Standard deviation
