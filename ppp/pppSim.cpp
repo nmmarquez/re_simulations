@@ -20,38 +20,56 @@ Type objective_function<Type>::operator() ()
     using namespace density;
     using namespace Eigen;
     
-    DATA_IVECTOR(y);
-    DATA_VECTOR(x);    
-    DATA_IVECTOR(geo);
+    // Counts of observed values
+    DATA_IVECTOR(yPoint);
+    DATA_IVECTOR(yPoly);
+    
+    // Denoms
+    DATA_IVECTOR(denomPoint);
+    DATA_IVECTOR(denomPoly);
+    
+    // Projections
+    DATA_SPARSE_MATRIX(AprojPoint);
+    DATA_SPARSE_MATRIX(AprojObs);
+    DATA_SPARSE_MATRIX(AprojPoly);
+    
     // SPDE objects
     DATA_SPARSE_MATRIX(M0);
     DATA_SPARSE_MATRIX(M1);
     DATA_SPARSE_MATRIX(M2);
-    DATA_IVECTOR(denom);
     
+    // Parameters
     PARAMETER(beta0);
-    PARAMETER(beta1);
     PARAMETER(log_tau);
     PARAMETER(log_kappa);
     PARAMETER_VECTOR(z);
     
+    printf("%s\n", "Loading data complete.");
+    
     Type tau = exp(log_tau);
     Type kappa = exp(log_kappa);
-    
-    printf("%s\n", "Loading Complete.");
     
     Type nll = 0.0;
     
     printf("%s\n", "Evaluate random effects.");
     
-    SparseMatrix<Type> Q = spde_Q(log_kappa, log_tau, M0, M1, M2);;
+    SparseMatrix<Type> Q = spde_Q(log_kappa, log_tau, M0, M1, M2);
     
     nll += GMRF(Q)(z);  // Negative log likelihood
     
-    for(int i=0; i<y.size(); i++){    
-        Type logitp = beta0 + beta1 * x[i] + z[geo[i]];
+    printf("%s\n", "Project Points.");
+    vector<Type> projPoint = AprojPoint * z;
+    printf("%s\n", "Project observed.");
+    vector<Type> projObs = AprojObs * z;
+    printf("%s\n", "transpose matrix.");
+    SparseMatrix<Type> RAprojPoly = AprojPoly.transpose();
+    printf("%s\n", "Project polygon values.");
+    vector<Type> projPoly = RAprojPoly * projObs;
+    
+    for(int i=0; i<yPoint.size(); i++){    
+        Type logitp = beta0 + projPoint[i];
         Type p = exp(logitp) / (Type(1) + exp(logitp));
-        nll -= dbinom(Type(y[i]), Type(denom[i]), p, true);
+        nll -= dbinom(Type(yPoint[i]), Type(denomPoint[i]), p, true);
     }
     
     REPORT(z);
