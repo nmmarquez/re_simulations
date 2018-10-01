@@ -75,6 +75,12 @@ Type objective_function<Type>::operator() ()
         nll -= dbinom(Type(yPoint[i]), Type(denomPoint[i]), p, true);
     }
     
+    for(int i=0; i<yPoly.size(); i++){    
+        Type logitp = beta0 + projPoly[loc[i]];
+        Type p = exp(logitp) / (Type(1) + exp(logitp));
+        nll -= dbinom(Type(yPoly[i]), Type(denomPoly[i]), p, true);
+    }
+    
     REPORT(z);
     return nll;
 }

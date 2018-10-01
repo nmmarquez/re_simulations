@@ -25,7 +25,7 @@ mesh2DF <- function(x){
 
 # what is the shape that we are dealing with?
 row.names(US.df@data) <- 1:nrow(US.df)
-US.df$id <- 1:nrow(US.df)#row.names(US.df@data)
+US.df$id <- 1:nrow(US.df)
 USDF <- fortify(US.df, region="id") %>%
     mutate(id=as.numeric(id)) %>%
     left_join(US.df@data, by="id")
@@ -51,7 +51,6 @@ mesh <- inla.mesh.2d(
     randomSPDF, 
     cutoff=.3,
     max.edge=c(50, 500))
-points(randomSPDF, col="red", pch=21, cex=.3)
 proj <- inla.mesh.projector(mesh, dims=c(400, 400))
 
 sigma0 <-  .2   ## Standard deviation
@@ -84,10 +83,10 @@ simValues %>%
 countyRiskDF <- simValues %>%
     filter(obsField) %>%
     group_by(id) %>%
-    summarize(obs=mean(obs, na.rm=T)) %>%
-    right_join(USDF, by="id", copy=T)
+    summarize(obs=mean(obs, na.rm=T), cells=n())
 
 countyRiskDF %>%
+    right_join(USDF, by="id", copy=T) %>%
     ggplot +
     aes(long,lat,group=group,fill=obs) + 
     geom_polygon() +
@@ -161,9 +160,22 @@ obsDF <- data.table(long=obsPoints[,1], lat=obsPoints[,2]) %>%
     mutate(re=as.vector(AprojPoint %*% x), denom=rpois(N, 100)) %>%
     mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob))
 
+USDF %>%
+    ggplot +
+    aes(long,lat,group=group) + 
+    geom_path(color="black", size=.1) +
+    coord_equal() + 
+    theme_void() +
+    geom_point(
+        aes(group=NULL), 
+        data=obsDF,
+        color="red",
+        size=.5)
+
+plot(mesh)
+points(obsPoints, col="red", pch=21, cex=.2)
+
 simPointsOnly <- runModel(obsDF, recompile=F, symboic=F)
-
-
 estValues <- mesh2DF(simPointsOnly$report$z)
 
 rbind(
@@ -183,5 +195,55 @@ rbind(
     facet_wrap(~type)
 
 # now lets try adding in some polygons to the equation
+obsPointsMix <- spsample(US.df, N/2, "random")
+AprojPointMix <- inla.spde.make.A(mesh=mesh, loc=obsPointsMix@coords)
+obsPointMixDF <- data.table(
+    long=obsPointsMix@coords[,1], 
+    lat=obsPointsMix@coords[,2]) %>%
+    mutate(re=as.vector(AprojPointMix %*% x), denom=rpois(n(), 100)) %>%
+    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
 
+obsPolyMixDF <- over(obsPointsMix, US.df) %>%
+    group_by(id) %>%
+    summarize(nObs=n()) %>%
+    right_join(countyRiskDF, by="id") %>%
+    filter(is.na(nObs)) %>%
+    select(-nObs) %>%
+    rename(re=obs) %>%
+    mutate(denom=cells*5, loc=id-1) %>%
+    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
 
+USDF %>%
+    left_join(obsPolyMixDF) %>%
+    mutate(observed=as.numeric(!is.na(denom)) * .2) %>%
+    ggplot +
+    aes(long,lat,group=group) + 
+    geom_path(color="black", size=.1) +
+    geom_polygon(aes(alpha=observed)) +
+    coord_equal() + 
+    theme_void() +
+    geom_point(
+        aes(group=NULL), 
+        data=obsPointMixDF,
+        color="red",
+        size=.5) +
+    guides(alpha=FALSE)
+
+simPPMix <- runModel(obsPointMixDF, obsPolyMixDF, recompile=F, symboic=F)
+estValuesMix <- mesh2DF(simPPMix$report$z)
+rbind(
+    mutate(estValuesMix, type="Estimated Mix"),
+    mutate(estValues, type="Estimated Points"),
+    mutate(simValues, type="True")) %>%
+    filter(obsField) %>%
+    ggplot(aes(x, y, z=obs)) +
+    geom_raster(aes(fill = obs)) + 
+    coord_equal() +
+    theme_void() + 
+    scale_fill_distiller(palette = "Spectral") +
+    geom_path(
+        aes(long,lat, group=group, fill=NULL, z=NULL),
+        color="black",
+        size=.1,
+        data=USDF) +
+    facet_wrap(~type, nrow = 2)
