@@ -24,6 +24,9 @@ Type objective_function<Type>::operator() ()
     DATA_IVECTOR(yPoint);
     DATA_IVECTOR(yPoly);
     
+    // Polygon index
+    DATA_IVECTOR(loc);
+    
     // Denoms
     DATA_IVECTOR(denomPoint);
     DATA_IVECTOR(denomPoly);
