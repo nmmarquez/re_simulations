@@ -134,7 +134,7 @@ AprojPoly <- Matrix(
     }))
 
 model <- "pppSim"
-recompile <- TRUE
+recompile <- FALSE
 if(recompile){
     if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
     if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
