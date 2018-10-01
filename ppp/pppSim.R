@@ -143,9 +143,9 @@ if(recompile){
 
 compile(paste0(model, ".cpp"))
 
-N <- 500
+N <- 800
 beta0 <- -1
-obsPoints <- as.matrix(select(sample_n(randomSPDF@data, N), long, lat))
+obsPoints <- spsample(US.df, N, "random")@coords
 
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
 
@@ -180,7 +180,7 @@ estValues <- expand.grid(proj$x, proj$y) %>%
     SpatialPoints(US.df@proj4string) %>%
     over(US.df) %>%
     as.data.table %>%
-    cbind(mesh2DF(x)) %>%
+    cbind(mesh2DF(Report$z)) %>%
     mutate(aproj=1:n(), obsField=!is.na(id)) %>%
     group_by(obsField) %>%
     mutate(obsAproj=1:n()) %>%
@@ -190,3 +190,19 @@ estValues <- expand.grid(proj$x, proj$y) %>%
     mutate(stateID=ifelse(!obsField, NA, stateID)) %>%
     mutate(obsAproj=ifelse(!obsField, NA, obsAproj)) %>%
     as.data.table
+
+rbind(
+    mutate(estValues, type="Estimated"), 
+    mutate(simValues, type="True")) %>%
+    filter(obsField) %>%
+    ggplot(aes(x, y, z=obs)) +
+    geom_raster(aes(fill = obs)) + 
+    coord_equal() +
+    theme_void() + 
+    scale_fill_distiller(palette = "Spectral") +
+    geom_path(
+        aes(long,lat, group=group, fill=NULL, z=NULL),
+        color="black",
+        size=.1,
+        data=USDF) +
+    facet_wrap(~type)
