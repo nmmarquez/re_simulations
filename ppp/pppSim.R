@@ -3,10 +3,20 @@ pacman::p_load(INLA, ggplot2, data.table, lattice, arm, dplyr, TMB,
                ar.matrix, dtplyr)
 set.seed(124)
 
-mesh2DF <- function(x){
+mesh2DF <- function(model){
+    if(class(model) == "numeric"){
+        x <- model
+        sdx <- rep(NA, length(x))
+    }
+    else{
+        x <- model$z$mu
+        sdx <- model$z$sd
+    }
+    print(sdx[1])
     M <- length(proj$x)
     DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), 
-                     obs=c(inla.mesh.project(proj, field=x)))
+                     obs=c(inla.mesh.project(proj, field=x)),
+                     sdx=c(inla.mesh.project(proj, field=sdx)))
     expand.grid(proj$x, proj$y) %>%
         SpatialPoints(US.df@proj4string) %>%
         over(US.df) %>%
@@ -31,26 +41,13 @@ USDF <- fortify(US.df, region="id") %>%
     left_join(US.df@data, by="id")
 
 randomSPDF <- spsample(US.df, 800, "random")
-
-USDF %>%
-    ggplot +
-    aes(long,lat,group=group) + 
-    geom_path(color="black", size=.1) +
-    coord_equal() + 
-    theme_void() +
-    geom_point(
-        aes(x, y, group=NULL), 
-        data=as.data.table(randomSPDF@coords),
-        color="red",
-        size=.5)
-
 randomSPDF$long <- randomSPDF@coords[,1]
 randomSPDF$lat <- randomSPDF@coords[,2]
 
-mesh <- inla.mesh.2d(
+plot(mesh <- inla.mesh.2d(
     randomSPDF, 
-    cutoff=.3,
-    max.edge=c(50, 500))
+    cutoff=.1,
+    max.edge=c(50, 500)))
 proj <- inla.mesh.projector(mesh, dims=c(400, 400))
 
 sigma0 <-  .2   ## Standard deviation
@@ -112,7 +109,7 @@ AprojPoly <- Matrix(
         pix
     }))
 
-runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T){
+runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=1000){
     model <- "pppSim"
     if(recompile){
         if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
@@ -153,12 +150,22 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T){
         objective=Obj$fn,
         gradient=Obj$gr,
         control=list(eval.max=1e4, iter.max=1e4))
+    sdrep <- sdreport(Obj, getJointPrecision=TRUE)
     runtime <- Sys.time() - startTime
+    zindex <- "z" == row.names(sdrep$jointPrecision)
+    Qz <- sdrep$jointPrecision[zindex,zindex]
+    Zdraws <- sim.AR(draws, Qz)
     Report <- Obj$report()
-    return(list(obj=Obj, opt=Opt, report=Report, runtime=runtime))
+    zDF <- tibble(
+        mu=Report$z,
+        sd=apply(Zdraws, 2, sd),
+        lwr=apply(Zdraws, 2, quantile, probs=.025),
+        upr=apply(Zdraws, 2, quantile, probs=.975)
+        )
+    return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
 }
 
-N <- 800
+N <- 1200
 beta0 <- -1
 obsPoints <- spsample(US.df, N, "random")@coords
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
@@ -182,7 +189,7 @@ plot(mesh)
 points(obsPoints, col="red", pch=21, cex=.2)
 
 simPointsOnly <- runModel(obsDF, recompile=F, symboic=F)
-estValues <- mesh2DF(simPointsOnly$report$z)
+estValues <- mesh2DF(simPointsOnly)
 
 rbind(
     mutate(estValues, type="Estimated"), 
@@ -236,7 +243,7 @@ USDF %>%
     guides(alpha=FALSE)
 
 simPPMix <- runModel(obsPointMixDF, obsPolyMixDF, recompile=F, symboic=F)
-estValuesMix <- mesh2DF(simPPMix$report$z)
+estValuesMix <- mesh2DF(simPPMix)
 rbind(
     mutate(estValuesMix, type="Estimated Mix"),
     mutate(estValues, type="Estimated Points"),
@@ -263,7 +270,7 @@ obsPolyDF <- countyRiskDF %>%
     mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
 
 simPolyOnly <- runModel(NULL, obsPolyDF, recompile=F, symboic=F)
-estValuesPoly <- mesh2DF(simPolyOnly$report$z)
+estValuesPoly <- mesh2DF(simPolyOnly)
 
 rbind(
     mutate(estValuesMix, type="Estimated Mix"),
@@ -293,10 +300,44 @@ rbind(
     summarize(obs=mean(obs, na.rm=T)) %>%
     full_join(USDF, by="id", copy=T) %>%
     ggplot +
-    aes(long,lat,group=group,fill=obs) + 
+    aes(long,lat,group=group,fill=obs) +
     geom_polygon() +
     geom_path(color="black", size=.1) +
-    coord_equal() + 
+    coord_equal() +
     theme_void() +
     scale_fill_distiller(palette = "Spectral") +
     facet_wrap(~type, nrow = 2)
+
+rbind(
+    mutate(estValuesMix, type="Estimated Mix"),
+    mutate(estValues, type="Estimated Points"),
+    mutate(estValuesPoly, type="Estimated Polygons")) %>%
+    filter(obsField) %>%
+    ggplot(aes(x, y, z=sdx)) +
+    geom_raster(aes(fill = sdx)) + 
+    coord_equal() +
+    theme_void() + 
+    scale_fill_distiller(palette = "Spectral") +
+    geom_path(
+        aes(long,lat, group=group, fill=NULL, z=NULL),
+        color="black",
+        size=.1,
+        data=USDF) +
+    facet_wrap(~type, nrow = 2)
+
+evalModel <- function(model){
+    c(rmse=sqrt(mean((model$z$mu - x)^2)),
+      coverage=mean((x >= model$z$lwr) & (x <= model$z$upr)),
+      runtime=model$runtime)
+}
+
+list(Points=simPointsOnly, Poly=simPolyOnly, Mix=simPPMix) %>%
+    sapply(evalModel)
+
+rbind(
+    mutate(estValuesMix, type="Estimated Mix"),
+    mutate(estValues, type="Estimated Points"),
+    mutate(estValuesPoly, type="Estimated Polygons")) %>%
+    filter(obsField) %>%
+    group_by(type) %>%
+    summarize(sdxm=mean(sdx))
