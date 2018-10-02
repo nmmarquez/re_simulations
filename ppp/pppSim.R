@@ -112,7 +112,7 @@ AprojPoly <- Matrix(
         pix
     }))
 
-runModel <- function(DFpoint, DFpoly=NULL, recompile=F, symboic=T){
+runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T){
     model <- "pppSim"
     if(recompile){
         if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
@@ -120,13 +120,17 @@ runModel <- function(DFpoint, DFpoly=NULL, recompile=F, symboic=T){
         if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
     }
     compile(paste0(model, ".cpp"))
+    if(is.null(DFpoly)){
+        empty <- vector("integer") 
+        DFpoly <- data.table(obs=empty, denom=empty, loc=empty, long=empty)
+    }
+    if(is.null(DFpoint)){
+        empty <- vector("integer") 
+        DFpoint <- data.table(obs=empty, denom=empty, lat=empty, long=empty)
+    }
     AprojPoint <- inla.spde.make.A(
         mesh=mesh, 
         loc=as.matrix(select(DFpoint, long, lat)))
-    if(is.null(DFpoly)){
-        empty <- vector("integer") 
-        DFpoly <- data.table(obs=empty, denom=empty, loc=empty)
-    }
     Data <- list(
         yPoint=DFpoint$obs, denomPoint=DFpoint$denom, 
         yPoly=DFpoly$obs, denomPoly=DFpoly$denom, loc=DFpoly$loc,
@@ -138,6 +142,7 @@ runModel <- function(DFpoint, DFpoly=NULL, recompile=F, symboic=T){
     )
     
     dyn.load(dynlib(model))
+    startTime <- Sys.time()
     Obj <- MakeADFun(data=Data, parameters=Params, DLL=model, random="z")
     symbolic <- T
     if(symbolic){
@@ -148,8 +153,9 @@ runModel <- function(DFpoint, DFpoly=NULL, recompile=F, symboic=T){
         objective=Obj$fn,
         gradient=Obj$gr,
         control=list(eval.max=1e4, iter.max=1e4))
+    runtime <- Sys.time() - startTime
     Report <- Obj$report()
-    return(list(obj=Obj, opt=Opt, report=Report))
+    return(list(obj=Obj, opt=Opt, report=Report, runtime=runtime))
 }
 
 N <- 800
@@ -246,4 +252,51 @@ rbind(
         color="black",
         size=.1,
         data=USDF) +
+    facet_wrap(~type, nrow = 2)
+
+## What about only polys
+
+obsPolyDF <- countyRiskDF %>%
+    arrange(id) %>%
+    rename(re=obs) %>%
+    mutate(denom=cells*5, loc=id-1) %>%
+    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
+
+simPolyOnly <- runModel(NULL, obsPolyDF, recompile=F, symboic=F)
+estValuesPoly <- mesh2DF(simPolyOnly$report$z)
+
+rbind(
+    mutate(estValuesMix, type="Estimated Mix"),
+    mutate(estValues, type="Estimated Points"),
+    mutate(estValuesPoly, type="Estimated Polygons"),
+    mutate(simValues, type="True")) %>%
+    filter(obsField) %>%
+    ggplot(aes(x, y, z=obs)) +
+    geom_raster(aes(fill = obs)) + 
+    coord_equal() +
+    theme_void() + 
+    scale_fill_distiller(palette = "Spectral") +
+    geom_path(
+        aes(long,lat, group=group, fill=NULL, z=NULL),
+        color="black",
+        size=.1,
+        data=USDF) +
+    facet_wrap(~type, nrow = 2)
+
+rbind(
+    mutate(estValuesMix, type="Estimated Mix"),
+    mutate(estValues, type="Estimated Points"),
+    mutate(estValuesPoly, type="Estimated Polygons"),
+    mutate(simValues, type="True")) %>%
+    filter(obsField) %>%
+    group_by(id, type) %>%
+    summarize(obs=mean(obs, na.rm=T)) %>%
+    full_join(USDF, by="id", copy=T) %>%
+    ggplot +
+    aes(long,lat,group=group,fill=obs) + 
+    geom_polygon() +
+    geom_path(color="black", size=.1) +
+    coord_equal() + 
+    theme_void() +
+    scale_fill_distiller(palette = "Spectral") +
     facet_wrap(~type, nrow = 2)
