@@ -5,21 +5,40 @@ date: "October 3, 2018"
 output: html_document
 ---
 
-### Normal Binomial Likelihood of Points in Space
+### Simple Linear Spatial Model
 $$
 i,j \in \{1, \dots, n\}\\
-Y_i \sim \text{Binomial}(N_i, p_i) \\
-\text{logit}(p_i) = X_i \boldsymbol{\beta} + \eta(s_i)  \\
+Y_i \sim \mathcal{N}(\hat{y}_i, \sigma_\epsilon) \\
+\hat{y}_i = \beta_0 + \eta(s_i) \\
+\Sigma_{ij} = \frac{\sigma^2_\eta}{2^{\nu-1} \Gamma(\nu)}
+    (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
+\Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j)) \\
+$$
+
+### Extension to Areal Units  
+$$
+k \in \{ 1, \dots , m \} \\
+l \in \mathbb{R} \\
+Y_k \sim \mathcal{N}(\hat{y}_k, \sigma_\epsilon) \\
+\hat{y}_k = \beta_0 + \frac{\int_{\forall l \in \mathcal{A}_k} \eta(s_l)ds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
+$$
+
+### Non Linear Binomial Likelihood of Points in Space
+$$
+i,j \in \{1, \dots, n\}\\
+Y_i \sim \text{Binomial}(N_i, \hat{p}_i) \\
+\text{logit}(\hat{p}_i) = X_i \boldsymbol{\beta} + \eta(s_i)  \\
 \boldsymbol{\eta} \sim \text{MVN}(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
 \Sigma_{ij} = \frac{\sigma^2_\eta}{2^{\nu-1} \Gamma(\nu)}
     (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
 \Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j))
 $$
 
-### Predictions of Areal Unit
+### Predictions of Evenly Distributed Population Areal Unit
 $$
 k \in \{ 1, \dots , m \} \\
 l \in \mathbb{R} \\
-Y_k \sim \text{Binomial}(N_k, p_k) \\
-p_k = \int_{\forall l \in \mathcal{A}_k} p_lN_ldl
+Y_k \sim \text{Binomial}(N_k, \hat{p}_k) \\
+\hat{p}_k = \frac{\int_{\forall l \in \mathcal{A}_k} \hat{p}_lds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
+\hat{p}_k \approx \frac{\sum_l \hat{p}_l \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}=\frac{\sum_l \text{inv.logit}\big(X_l \boldsymbol{\beta} + \eta(s_l) \big) \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}
 $$
