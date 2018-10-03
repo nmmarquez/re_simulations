@@ -1,7 +1,6 @@
 rm(list=ls())
 pacman::p_load(INLA, ggplot2, data.table, lattice, arm, dplyr, TMB, ar.matrix)
 set.seed(124)
-# compare the INLA Q matrix vs the by hand to make sure we are on the same page
 
 mesh2DF <- function(x){
     M <- length(proj$x)
@@ -99,9 +98,9 @@ runModel <- function(DT, recompile=FALSE, symbolic=TRUE, draws=1000){
     # compile the code if not there
     model <- "ppp"
     if(recompile){
-        if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
-        if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
-        if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
+        if(file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
+        if(file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
+        if(file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
     }
     compile(paste0(model, ".cpp"))
     

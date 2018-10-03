@@ -1,19 +1,29 @@
 ---
-title: "Prediction of Area"
-author: "Neal Marquez"
-date: "October 3, 2018"
-output: html_document
+output: 
+    html_document:
+        includes:
+            in_header: assets/huskyheader.html
+            before_body: assets/huskynavbar.html
 ---
+#### Neal Marquez
+
+## Estimating Values from Points and Polygons  
+Let's say that there is a continous random variable that we observe that takes place on a 2 dimensional spatial field $s$. The random variable is correlated over space and follows a Gaussian Process with a constant mean function and a Matérn covariance function along with additional random white noise. Lindgren et al 2011 show that a Gaussian Field, which is continously indexed, can be well represented by a Gaussian Markov Random Field, which is discretely indexed. The model below shows the data generation process for an idividual point observed in space.
+
 
 ### Simple Linear Spatial Model
 $$
 i,j \in \{1, \dots, n\}\\
-Y_i \sim \mathcal{N}(\hat{y}_i, \sigma_\epsilon) \\
-\hat{y}_i = \beta_0 + \eta(s_i) \\
+Y_i \sim \mathcal{N}(\beta_0 + \eta(s_i), \sigma_\epsilon) \\
+\boldsymbol{\eta} \sim \text{MVN}(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
 \Sigma_{ij} = \frac{\sigma^2_\eta}{2^{\nu-1} \Gamma(\nu)}
     (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
 \Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j)) \\
 $$
+
+In this model $\sigma_\epsilon$ represents the iid white noise, $\beta_0$ is the constant mean function, $s_i$ is the index in space for point $i$, and $Y_i$ is the observed value. $\eta$ represents the latent effects of the continous spatial field. Each index on the spatial field is covaries with every other point on the spatial field as dictated by the Multivariate Normal Distribution with a covariance matrix $\Sigma$. $\Sigma$ it self has several paramters that govern its structure $\kappa$, $\sigma_\eta$, and $\nu$.
+
+The models paramters may be estimated using one of several heirarchical modeling approaches and once done the ability to predict to new locations on the spatial field that have not yet been observed is trivial as explained in Lindgren et al. If however we observe a point that we dont know the exact location of the observation but know the area $\mathcal{A}$ that the point comes from we may still leverage the underlying the spatial field by using the definite integral of the latent field which is captured by $\mathcal{A}$. An underlying assumption to thiss process is the each point in space is equally likely to be selected however we may adjust the integral to include a weigting function if this is not true.
 
 ### Extension to Areal Units  
 $$
@@ -22,6 +32,8 @@ l \in \mathbb{R} \\
 Y_k \sim \mathcal{N}(\hat{y}_k, \sigma_\epsilon) \\
 \hat{y}_k = \beta_0 + \frac{\int_{\forall l \in \mathcal{A}_k} \eta(s_l)ds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
 $$
+
+This process is relatively straight forward in the linear model process where the mean is constant, however, the inlcusion of covriates and non linearlity make this process more difficult. Nevertheless, we me walkthrough the process in a similar way. First we look at the data likielihood for points in space. This process is similar to the linear analog with the exception of the inverse logit transformation of the linear additive effects of the covariates and the latent spatial effects.
 
 ### Non Linear Binomial Likelihood of Points in Space
 $$
@@ -33,6 +45,8 @@ Y_i \sim \text{Binomial}(N_i, \hat{p}_i) \\
     (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
 \Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j))
 $$
+
+When we recieve observations from an areal unit rather than a point we can evaluate the likelihood using the integral of the field of estimated probabilities, which is a function of the underlying latent field, rather than the latent field. This integral is not easily derived however we can use the Riemann approximation of the probability field to calculate the integral. In this we may use data that comes from a known areal unit alongside spatial point data. This process again assumes an equal chance of selecting points across the field but just as before a weighting function may be applied in order to adjust for the differential probabilities of selecting an area.  
 
 ### Predictions of Evenly Distributed Population Areal Unit
 $$
