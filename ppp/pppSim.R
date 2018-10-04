@@ -12,7 +12,6 @@ mesh2DF <- function(model){
         x <- model$z$mu
         sdx <- model$z$sd
     }
-    print(sdx[1])
     M <- length(proj$x)
     DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), 
                      obs=c(inla.mesh.project(proj, field=x)),

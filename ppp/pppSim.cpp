@@ -61,14 +61,15 @@ Type objective_function<Type>::operator() ()
     printf("%s\n", "Evaluating likelihood of RE latent field.");
     nll += GMRF(Q)(z);
     
-    printf("%s\n", "Project Points.");
+    printf("%s\n", "Project Latent Points.");
     vector<Type> projPoint = AprojPoint * z;
     printf("%s\n", "Project observed.");
-    vector<Type> projObs = AprojObs * z;
+    vector<Type> projLatObs = AprojObs * z + beta0;
+    vector<Type> projPObs = exp(projLatObs) / (Type(1.) + exp(projLatObs));
     printf("%s\n", "transpose matrix.");
     SparseMatrix<Type> RAprojPoly = AprojPoly.transpose();
     printf("%s\n", "Project polygon values.");
-    vector<Type> projPoly = RAprojPoly * projObs;
+    vector<Type> projPoly = RAprojPoly * projPObs;
     
     printf("%s\n", "Evaluating likelihood of Points.");
     for(int i=0; i<yPoint.size(); i++){    
@@ -78,9 +79,8 @@ Type objective_function<Type>::operator() ()
     }
     
     printf("%s\n", "Evaluating likelihood of Polygons.");
-    for(int i=0; i<yPoly.size(); i++){    
-        Type logitp = beta0 + projPoly[loc[i]];
-        Type p = exp(logitp) / (Type(1) + exp(logitp));
+    for(int i=0; i<yPoly.size(); i++){
+        Type p = projPoly[loc[i]];
         nll -= dbinom(Type(yPoly[i]), Type(denomPoly[i]), p, true);
     }
     
