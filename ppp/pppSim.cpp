@@ -72,7 +72,8 @@ Type objective_function<Type>::operator() ()
     vector<Type> projPoly = RAprojPoly * projPObs;
     
     printf("%s\n", "Evaluating likelihood of Points.");
-    for(int i=0; i<yPoint.size(); i++){    
+    for(int i=0; i<yPoint.size(); i++){
+        printf("Evaluating likelihood of Point %i\n", i);
         Type logitp = beta0 + projPoint[i];
         Type p = exp(logitp) / (Type(1) + exp(logitp));
         nll -= dbinom(Type(yPoint[i]), Type(denomPoint[i]), p, true);
@@ -80,6 +81,7 @@ Type objective_function<Type>::operator() ()
     
     printf("%s\n", "Evaluating likelihood of Polygons.");
     for(int i=0; i<yPoly.size(); i++){
+        printf("Evaluating likelihood of Polygon %i\n", i);
         Type p = projPoly[loc[i]];
         nll -= dbinom(Type(yPoly[i]), Type(denomPoly[i]), p, true);
     }
