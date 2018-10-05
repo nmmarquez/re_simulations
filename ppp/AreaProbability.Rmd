@@ -1,5 +1,5 @@
 ---
-output: 
+output:
     html_document:
         includes:
             in_header: assets/huskyheader.html
@@ -7,11 +7,23 @@ output:
 ---
 #### Neal Marquez
 
-## Estimating Values from Points and Polygons  
-Let's say that there is a continous random variable that we observe that takes place on a 2 dimensional spatial field $s$. The random variable is correlated over space and follows a Gaussian Process with a constant mean function and a Matérn covariance function along with additional random white noise. Lindgren et al 2011 show that a Gaussian Field, which is continously indexed, can be well represented by a Gaussian Markov Random Field, which is discretely indexed. The model below shows the data generation process for an idividual point observed in space.
+## Abstract
 
+A newfound focus on reducing inequalities in health outcomes has required that data from extremely granular locations be used to understand the geographic risk field of detrimental health outcomes and who lies at the margins. While some data sources provide geographic coordinates of the area that individuals were surveyed, many more data points are representative of larger areal units. How to harmonize these data sources has been widely contested but to date no solution has overcome issues with changing areal units and point data. We present a new approach using an approximated integration of a continuous underlying field to incorporate areal units of data of any shape alongside point data. This approach is applicable to many non-linear models and measures of responses. To test this approach we compare our methodology against previously stated solutions in a simulation environment where the underlying structure of the "risk field" is known. In addition we provide an example of the implementation of our approach using Demographic and Health Survey data of under 5 mortality in the Dominican Republic. We find that ...
 
-### Simple Linear Spatial Model
+## Methods
+
+### Estimating Values from Points and Polygons  
+Let's us assume that there is a continuous random variable that we observe that takes place on a 2 dimensional spatial field $s$. The random variable is correlated over space and follows a Gaussian Process with a constant mean function and a Matérn covariance function along with additional random white noise. 
+
+#### Underlying Data Generating Process
+$$
+\boldsymbol{Y} \sim \mathcal{GP}(\mu_\text{Constant}(\beta_0), K_{\text{Matern}}(\kappa, \sigma_\eta, \nu) + K_{\text{White}}(\sigma_\epsilon)) \\
+$$
+
+Lindgren et al 2011 show that a Gaussian Field, which is continuously indexed, can be well represented by a Gaussian Markov Random Field, which is discretely indexed. If we observe a number of points in the set $\{1, \dots, n\}$ we can estimate the underlying field with linear form shown below. 
+
+#### Simple Linear Spatial Model
 $$
 i,j \in \{1, \dots, n\}\\
 Y_i \sim \mathcal{N}(\beta_0 + \eta(s_i), \sigma_\epsilon) \\
@@ -21,11 +33,16 @@ Y_i \sim \mathcal{N}(\beta_0 + \eta(s_i), \sigma_\epsilon) \\
 \Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j)) \\
 $$
 
-In this model $\sigma_\epsilon$ represents the iid white noise, $\beta_0$ is the constant mean function, $s_i$ is the index in space for point $i$, and $Y_i$ is the observed value. $\eta$ represents the latent effects of the continous spatial field. Each index on the spatial field is covaries with every other point on the spatial field as dictated by the Multivariate Normal Distribution with a covariance matrix $\Sigma$. $\Sigma$ it self has several paramters that govern its structure $\kappa$, $\sigma_\eta$, and $\nu$.
+$$
+i,j \in \{1, \dots, n\}\\
+Y_i \sim \mathcal{GP}(\mu_\text{Constant}(\beta_0), \kappa_{\text{Matern}}(\kappa, \sigma_\eta, \nu) + \kappa_{\text{White}}(\sigma_\epsilon)) \\
+$$
 
-The models paramters may be estimated using one of several heirarchical modeling approaches and once done the ability to predict to new locations on the spatial field that have not yet been observed is trivial as explained in Lindgren et al. If however we observe a point that we dont know the exact location of the observation but know the area $\mathcal{A}$ that the point comes from we may still leverage the underlying the spatial field by using the definite integral of the latent field which is captured by $\mathcal{A}$. An underlying assumption to thiss process is the each point in space is equally likely to be selected however we may adjust the integral to include a weigting function if this is not true.
+In this model $\sigma_\epsilon$ represents the iid white noise variance, $\beta_0$ is the constant mean function, $s_i$ is the index in space for point $i$, and $Y_i$ is the observed value. $\eta$ represents the latent effects of the continuous spatial field. Each index on the spatial field covaries with every other point on the spatial field as dictated by the Multivariate Normal Distribution with a covariance matrix $\Sigma$. $\Sigma$ it self has several parameters that govern its structure $\kappa$, $\sigma_\eta$, and $\nu$.
 
-### Extension to Areal Units  
+The models parameters may be estimated using one of several hierarchical modeling approaches and once done the ability to predict to new locations on the spatial field that have not yet been observed is trivial as explained in Lindgren et al. If however we observe a point that we dont know the exact location of the observation but know the area $\mathcal{A}$ the point comes from we may still leverage the underlying spatial field by using the definite integral of the latent field which is captured by $\mathcal{A}$. An underlying assumption to this process is the each point in space is equally likely to be selected however we may adjust the integral to include a weighting function if this is not true.
+
+#### Extension to Areal Units  
 $$
 k \in \{ 1, \dots , m \} \\
 l \in \mathbb{R} \\
@@ -33,9 +50,9 @@ Y_k \sim \mathcal{N}(\hat{y}_k, \sigma_\epsilon) \\
 \hat{y}_k = \beta_0 + \frac{\int_{\forall l \in \mathcal{A}_k} \eta(s_l)ds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
 $$
 
-This process is relatively straight forward in the linear model process where the mean is constant, however, the inlcusion of covriates and non linearlity make this process more difficult. Nevertheless, we me walkthrough the process in a similar way. First we look at the data likielihood for points in space. This process is similar to the linear analog with the exception of the inverse logit transformation of the linear additive effects of the covariates and the latent spatial effects.
+This process is relatively straight forward in the linear model process where the mean is constant, however, the inclusion of covariates and non-linearity make this process more difficult. Nevertheless, we may walk through the process in a similar way when we have a binary outcome. First we look at the data likelihood for points in space. This process is similar to the linear analog with the exception of the inverse logit transformation of the linear additive effects of the covariates and the latent spatial effects.
 
-### Non Linear Binomial Likelihood of Points in Space
+#### Non Linear Binomial Likelihood of Points in Space
 $$
 i,j \in \{1, \dots, n\}\\
 Y_i \sim \text{Binomial}(N_i, \hat{p}_i) \\
@@ -46,9 +63,9 @@ Y_i \sim \text{Binomial}(N_i, \hat{p}_i) \\
 \Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j))
 $$
 
-When we recieve observations from an areal unit rather than a point we can evaluate the likelihood using the integral of the field of estimated probabilities, which is a function of the underlying latent field, rather than the latent field. This integral is not easily derived however we can use the Riemann approximation of the probability field to calculate the integral. In this we may use data that comes from a known areal unit alongside spatial point data. This process again assumes an equal chance of selecting points across the field but just as before a weighting function may be applied in order to adjust for the differential probabilities of selecting an area.  
+When we receive observations from an areal unit rather than a point we can evaluate the likelihood using the integral of the field of estimated probabilities, which is a function of the underlying latent field, rather than integrating the latent field itself. This integral is not easily derived, however, we can use the Riemann approximation of the probability field to estimate the integral. In this we may use data that comes from a known areal unit alongside spatial point data in computing the likelihood of the observed data. This process again assumes an equal chance of selecting points across the field but, just as before, a weighting function may be applied in order to adjust for the differential probabilities of selecting an area.  
 
-### Predictions of Evenly Distributed Population Areal Unit
+#### Predictions of Evenly Distributed Population Areal Unit
 $$
 k \in \{ 1, \dots , m \} \\
 l \in \mathbb{R} \\

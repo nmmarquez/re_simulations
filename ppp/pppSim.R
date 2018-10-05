@@ -49,8 +49,9 @@ plot(mesh <- inla.mesh.2d(
     max.edge=c(50, 500)))
 proj <- inla.mesh.projector(mesh, dims=c(400, 400))
 
-sigma0 <-  .2   ## Standard deviation
-range0 <- 2.5 ## Spatial range
+beta0 <- -1
+sigma0 <-  .6   ## Standard deviation
+range0 <- 1.5 ## Spatial range
 kappa0 <- sqrt(8) / range0
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0)
 spde <- inla.spde2.matern(mesh)
@@ -64,8 +65,9 @@ simValues <- mesh2DF(x)
 
 simValues %>%
     filter(obsField) %>%
-    ggplot(aes(x, y, z=obs)) +
-    geom_raster(aes(fill = obs)) + 
+    mutate(p=invlogit(beta0 + obs)) %>%
+    ggplot(aes(x, y, z=p)) +
+    geom_raster(aes(fill=p)) + 
     coord_equal() +
     theme_void() + 
     scale_fill_distiller(palette = "Spectral") +
@@ -79,19 +81,39 @@ simValues %>%
 countyRiskDF <- simValues %>%
     filter(obsField) %>%
     group_by(id) %>%
-    summarize(obs=mean(obs, na.rm=T), cells=n())
+    summarize(p=mean(invlogit(beta0 + obs), na.rm=T), cells=n())
 
 countyRiskDF %>%
     right_join(USDF, by="id", copy=T) %>%
     ggplot +
-    aes(long,lat,group=group,fill=obs) + 
+    aes(long,lat,group=group,fill=p) + 
     geom_polygon() +
     geom_path(color="black", size=.1) +
     coord_equal() + 
     theme_void() +
     scale_fill_distiller(palette = "Spectral")
 
-# Jsut get the observed Aproj since thats what we care about for likelihood
+# how does the estimation at multiple levels very our probability estimate
+# distribution?
+idtest <- 392
+simArea <- function(N, M, id=idtest){
+    obsPoints <- spsample(US.df[US.df$id==id,], N, "random")@coords
+    AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
+    obsDF <- data.table(long=obsPoints[,1], lat=obsPoints[,2]) %>%
+        mutate(re=as.vector(AprojPoint %*% x), denom=M) %>%
+        mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob))
+    pCounty <- countyRiskDF$p[countyRiskDF$id==id]
+    c(mean(obsDF$obs / M), rbinom(1, N*M, pCounty)/(N*M))
+}
+
+nSims <- 1000
+data.frame(
+    prob=c(sapply(1:nSims, function(i) simArea(1000, 5))),
+    type=rep(c("Point", "Area"), nSims)) %>%
+    ggplot(aes(x=prob, group=type, fill=type)) +
+    geom_density(alpha=.2)
+
+# Just get the observed Aproj since thats what we care about for likelihood
 AprojObs <- proj$proj$A[simValues$obsField,]
 
 # create matrix for which points fall within areal unit
@@ -165,7 +187,6 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=10
 }
 
 N <- 1200
-beta0 <- -1
 obsPoints <- spsample(US.df, N, "random")@coords
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
 obsDF <- data.table(long=obsPoints[,1], lat=obsPoints[,2]) %>%
