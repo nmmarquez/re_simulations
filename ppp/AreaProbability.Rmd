@@ -7,6 +7,13 @@ output:
 ---
 #### Neal Marquez
 
+```{R echo=F,message=F,warning=F}
+# Recall 
+# p(f)ff is a Gaussian process if for any finite subset {x 1 , . . . , x n } in X , the marginal
+# distribution over that finite subset p(f) has a multivariate Gaussian distribution.
+#
+```
+
 ## Abstract
 
 A newfound focus on reducing inequalities in health outcomes has required that data from extremely granular locations be used to understand the geographic risk field of detrimental health outcomes and who lies at the margins. While some data sources provide geographic coordinates of the area that individuals were surveyed, many more data points are representative of larger areal units. How to harmonize these data sources has been widely contested but to date no solution has overcome issues with changing areal units and point data. We present a new approach using an approximated integration of a continuous underlying field to incorporate areal units of data of any shape alongside point data. This approach is applicable to many non-linear models and measures of responses. To test this approach we compare our methodology against previously stated solutions in a simulation environment where the underlying structure of the "risk field" is known. In addition we provide an example of the implementation of our approach using Demographic and Health Survey data of under 5 mortality in the Dominican Republic. We find that ...
