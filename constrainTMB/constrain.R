@@ -17,7 +17,7 @@ M <- N/10
 const <- as.integer(args[2])
 seed <- as.integer(args[3])
 
-setwd("~/Documents/TMBtests/constrain")
+setwd("~/Documents/re_simulations/constrainTMB/")
 
 runSimulation <- function(N, M, const, a=3, b=5, sigmaObs=2, sigmaZ=.7, s=123){
     set.seed(s)
@@ -31,7 +31,8 @@ runSimulation <- function(N, M, const, a=3, b=5, sigmaObs=2, sigmaZ=.7, s=123){
     
     time_1 <- system.time(Obj <- MakeADFun(
         data=list(Y=y, x=x, group=groups-1, constrain=const),
-        parameters=list(a=0, b=0, logSigma=0, logSigmaZ=0, z=rep(0, M-const)),
+        parameters=list(a=0, b=0, logSigma=0, logSigmaZ=0, 
+                        z=ifelse(const==1, M-1, M)),
         random="z",
         DLL="constrain"))
     
@@ -58,7 +59,7 @@ simRezDF <-runSimulation(N, M, const, s=seed)
 write.csv(
     simRezDF,
     paste0(
-        "~/Documents/TMBtests/constrain/results/", 
+        "~/Documents/re_simulations/constrainTMB/results/", 
         N, "_", const, "_", seed, ".csv"),
     row.names = F
 )
