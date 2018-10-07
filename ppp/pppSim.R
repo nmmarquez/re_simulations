@@ -47,7 +47,7 @@ plot(mesh <- inla.mesh.2d(
     randomSPDF, 
     cutoff=.1,
     max.edge=c(50, 500)))
-proj <- inla.mesh.projector(mesh, dims=c(400, 400))
+proj <- inla.mesh.projector(mesh, dims=c(500, 500))
 
 beta0 <- -1
 sigma0 <-  .6   ## Standard deviation
@@ -106,12 +106,12 @@ simArea <- function(N, M, id=idtest){
     c(mean(obsDF$obs / M), rbinom(1, N*M, pCounty)/(N*M))
 }
 
-nSims <- 1000
-data.frame(
-    prob=c(sapply(1:nSims, function(i) simArea(1000, 5))),
-    type=rep(c("Point", "Area"), nSims)) %>%
-    ggplot(aes(x=prob, group=type, fill=type)) +
-    geom_density(alpha=.2)
+# nSims <- 1000
+# data.frame(
+#     prob=c(sapply(1:nSims, function(i) simArea(1000, 5))),
+#     type=rep(c("Point", "Area"), nSims)) %>%
+#     ggplot(aes(x=prob, group=type, fill=type)) +
+#     geom_density(alpha=.2)
 
 # Just get the observed Aproj since thats what we care about for likelihood
 AprojObs <- proj$proj$A[simValues$obsField,]

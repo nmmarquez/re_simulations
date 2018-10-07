@@ -55,11 +55,10 @@ Type objective_function<Type>::operator() ()
         placeScalar = pow((A * Sigma * At)(0,0), -1);
         printf("%s\n", "Build new place vector.");
         placevec = Sigma * At;
-        printf("place vec size should not be 1: %i\n", int(placevec.size()));
         printf("%s\n", "Multiply by scalar.");
         placevec = placevec * placeScalar;
         printf("%s\n", "Get new 1x1 value on right most side.");
-        placeScalar = (A * z)[0];
+        placeScalar = (A * z)(0,0);
         printf("%s\n", "Multiply by new vector");
         placevec = placevec * placeScalar;
         printf("%s\n", "Get adjusted values.");
@@ -83,14 +82,18 @@ Type objective_function<Type>::operator() ()
     }
     
     for(int i=0;i<Y.size();i++){
-        printf("Making Predictions %i\n", i);
+        //printf("Making Predictions %i\n", i);
         pred[i] = a + b * x[i] + zstar[group[i]];
     }
     
     // likelihood
     for(int j=0;j<zstar.size();j++){
-        printf("Evaluating likelihood of Random Effect %i\n", j);
-        res -= dnorm(Type(0.0), zstar[j], exp(logSigmaZ), true);
+        if(constrain == 1){
+            res -= dnorm(Type(0.0), zstar[j], exp(logSigmaZ), true);
+        }
+        else{
+            res -= dnorm(Type(0.0), z[j], exp(logSigmaZ), true);
+        }
     }
     
     printf("%s\n", "Evaluating data likelihood.");
