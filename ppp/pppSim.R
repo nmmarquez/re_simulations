@@ -106,13 +106,6 @@ simArea <- function(N, M, id=idtest){
     c(mean(obsDF$obs / M), rbinom(1, N*M, pCounty)/(N*M))
 }
 
-# nSims <- 1000
-# data.frame(
-#     prob=c(sapply(1:nSims, function(i) simArea(1000, 5))),
-#     type=rep(c("Point", "Area"), nSims)) %>%
-#     ggplot(aes(x=prob, group=type, fill=type)) +
-#     geom_density(alpha=.2)
-
 # Just get the observed Aproj since thats what we care about for likelihood
 AprojObs <- proj$proj$A[simValues$obsField,]
 
@@ -130,13 +123,9 @@ AprojPoly <- Matrix(
         pix
     }))
 
-runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=1000){
+runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
+                     symboic=T, draws=1000){
     model <- "pppSim"
-    if(recompile){
-        if (file.exists(paste0(model, ".so"))) file.remove(paste0(model, ".so"))
-        if (file.exists(paste0(model, ".o"))) file.remove(paste0(model, ".o"))
-        if (file.exists(paste0(model, ".dll"))) file.remove(paste0(model, ".dll"))
-    }
     compile(paste0(model, ".cpp"))
     if(is.null(DFpoly)){
         empty <- vector("integer") 
@@ -161,10 +150,13 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=10
     
     dyn.load(dynlib(model))
     startTime <- Sys.time()
-    Obj <- MakeADFun(data=Data, parameters=Params, DLL=model, random="z")
+    Obj <- MakeADFun(data=Data, parameters=Params, DLL=model, random="z",
+                     silent=!verbose)
+    Obj$env$tracemgc <- verbose
+    Obj$env$inner.control$trace <- verbose
     symbolic <- T
     if(symbolic){
-        runSymbolicAnalysis(Obj)
+        nah <- capture.output(runSymbolicAnalysis(Obj))
     }
     Opt <- nlminb(
         start=Obj$par,
@@ -173,6 +165,12 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=10
         control=list(eval.max=1e4, iter.max=1e4))
     sdrep <- sdreport(Obj, getJointPrecision=TRUE)
     runtime <- Sys.time() - startTime
+    if(attr(runtime, "units") == "mins"){
+        runtime <- as.numeric(runtime) * 60
+    }
+    else if(attr(runtime, "units") == "secs"){
+        runtime <- as.numeric(runtime)
+    }
     zindex <- "z" == row.names(sdrep$jointPrecision)
     Qz <- sdrep$jointPrecision[zindex,zindex]
     Zdraws <- sim.AR(draws, Qz)
@@ -187,11 +185,12 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, symboic=T, draws=10
 }
 
 N <- 1200
-obsPoints <- spsample(US.df, N, "random")@coords
+obsPoints <- spsample(US.df, N, "random")
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
-obsDF <- data.table(long=obsPoints[,1], lat=obsPoints[,2]) %>%
+obsDF <- data.table(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
     mutate(re=as.vector(AprojPoint %*% x), denom=rpois(N, 100)) %>%
-    mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob))
+    mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob)) %>%
+    cbind(select(over(obsPoints, US.df), id))
 
 USDF %>%
     ggplot +
@@ -206,7 +205,7 @@ USDF %>%
         size=.5)
 
 plot(mesh)
-points(obsPoints, col="red", pch=21, cex=.2)
+points(obsPoints@coords, col="red", pch=21, cex=.2)
 
 simPointsOnly <- runModel(obsDF, recompile=F, symboic=F)
 estValues <- mesh2DF(simPointsOnly)
@@ -228,23 +227,24 @@ rbind(
     facet_wrap(~type)
 
 # now lets try adding in some polygons to the equation
-obsPointsMix <- spsample(US.df, N/2, "random")
-AprojPointMix <- inla.spde.make.A(mesh=mesh, loc=obsPointsMix@coords)
-obsPointMixDF <- data.table(
-    long=obsPointsMix@coords[,1], 
-    lat=obsPointsMix@coords[,2]) %>%
-    mutate(re=as.vector(AprojPointMix %*% x), denom=rpois(n(), 100)) %>%
-    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
-
-obsPolyMixDF <- over(obsPointsMix, US.df) %>%
+obsPolyMixDF <- data.frame(
+    id=sample(US.df$id, size=round(nrow(US.df@data)/2))) %>%
+    left_join(obsDF) %>%
     group_by(id) %>%
-    summarize(nObs=n()) %>%
-    right_join(countyRiskDF, by="id") %>%
-    filter(is.na(nObs)) %>%
-    select(-nObs) %>%
-    rename(re=obs) %>%
-    mutate(denom=cells*5, loc=id-1) %>%
-    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
+    summarize(denom=sum(denom)) %>%
+    left_join(countyRiskDF) %>%
+    mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
+    mutate(loc=id-1) %>%
+    filter(!is.na(denom))
+
+obsPointMixDF <- obsDF %>% 
+    as.data.frame %>% 
+    left_join(select(obsPolyMixDF, id, cells)) %>%
+    filter(is.na(cells))
+
+AprojPointMix <- inla.spde.make.A(
+    mesh=mesh, 
+    loc=as.matrix(select(obsPointMixDF, long, lat)))
 
 USDF %>%
     left_join(obsPolyMixDF) %>%
@@ -283,11 +283,13 @@ rbind(
 
 ## What about only polys
 
-obsPolyDF <- countyRiskDF %>%
-    arrange(id) %>%
-    rename(re=obs) %>%
-    mutate(denom=cells*5, loc=id-1) %>%
-    mutate(prob=invlogit(beta0 + re), obs=rbinom(n(), denom, prob))
+obsPolyDF <- obsDF %>%
+    group_by(id) %>%
+    summarize(denom=sum(denom)) %>%
+    left_join(countyRiskDF) %>%
+    mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
+    mutate(loc=id-1) %>%
+    filter(!is.na(denom))
 
 simPolyOnly <- runModel(NULL, obsPolyDF, recompile=F, symboic=F)
 estValuesPoly <- mesh2DF(simPolyOnly)

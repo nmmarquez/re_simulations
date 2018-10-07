@@ -47,41 +47,39 @@ Type objective_function<Type>::operator() ()
     PARAMETER(log_kappa);
     PARAMETER_VECTOR(z);
     
-    printf("%s\n", "Loading data complete.");
+    // printf("%s\n", "Loading data complete.");
+    
+    int Npoint = yPoint.size();
+    int Npoly = yPoly.size();
     
     Type tau = exp(log_tau);
     Type kappa = exp(log_kappa);
     
     Type nll = 0.0;
     
-    printf("%s\n", "Evaluate random effects.");
+    // printf("%s\n", "Evaluate random effects.");
     
     SparseMatrix<Type> Q = spde_Q(log_kappa, log_tau, M0, M1, M2);
     
-    printf("%s\n", "Evaluating likelihood of RE latent field.");
+    // printf("%s\n", "Evaluating likelihood of RE latent field.");
     nll += GMRF(Q)(z);
     
-    printf("%s\n", "Project Latent Points.");
     vector<Type> projPoint = AprojPoint * z;
-    printf("%s\n", "Project observed.");
     vector<Type> projLatObs = AprojObs * z + beta0;
     vector<Type> projPObs = exp(projLatObs) / (Type(1.) + exp(projLatObs));
-    printf("%s\n", "transpose matrix.");
     SparseMatrix<Type> RAprojPoly = AprojPoly.transpose();
-    printf("%s\n", "Project polygon values.");
     vector<Type> projPoly = RAprojPoly * projPObs;
     
-    printf("%s\n", "Evaluating likelihood of Points.");
     for(int i=0; i<yPoint.size(); i++){
-        printf("Evaluating likelihood of Point %i\n", i);
+        // printf("Evaluating likelihood of Point %i\n", i);
         Type logitp = beta0 + projPoint[i];
         Type p = exp(logitp) / (Type(1) + exp(logitp));
         nll -= dbinom(Type(yPoint[i]), Type(denomPoint[i]), p, true);
     }
     
-    printf("%s\n", "Evaluating likelihood of Polygons.");
+    // printf("%s\n", "Evaluating likelihood of Polygons.");
     for(int i=0; i<yPoly.size(); i++){
-        printf("Evaluating likelihood of Polygon %i\n", i);
+        // printf("Evaluating likelihood of Polygon %i\n", i);
         Type p = projPoly[loc[i]];
         nll -= dbinom(Type(yPoly[i]), Type(denomPoly[i]), p, true);
     }

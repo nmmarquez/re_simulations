@@ -15,7 +15,7 @@ mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05))
 
 plot(mesh)
 points(loc[,1], loc[,2], col="red", pch=20)
-proj <- inla.mesh.projector(mesh, dims=c(500, 500))
+proj <- inla.mesh.projector(mesh, dims=c(600, 600))
 
 sigma0 <-  .2   ## Standard deviation
 range0 <- .1 ## Spatial range
