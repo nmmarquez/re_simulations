@@ -19,6 +19,10 @@ DF <- filter(allDF, country == "DOM") %>%
     as_tibble %>%
     mutate(GAUL_CODE=as.numeric(location_code))
 
+cat(paste0("Number of Observations: ", sum(DF$N), "\n"))
+cat(paste0("Number of Deaths: ", round(sum(DF$died)), "\n"))
+cat(paste0("Proportion: ", round(sum(DF$died)/sum(DF$N), 4), "\n"))
+
 admin1Codes <- DF %>%
     filter(shapefile == "admin2013_1") %>%
     select(location_code) %>%
@@ -34,9 +38,16 @@ DF %>%
     group_by(shapefile) %>%
     summarize(personCount=sum(N))
 
+DF %>%
+    select(nid, shapefile) %>%
+    rename(Nid=nid) %>%
+    unique %>%
+    left_join(read_csv("./id.csv"), by="Nid") %>%
+    select(Title, shapefile)
+
 # temporal breakdown: I definitely dont get this
 DF %>%
-    group_by(shapefile, year, svyyr) %>%
+    group_by(shapefile, year, svyyr, source) %>%
     summarize(personCount=sum(N))
 
 shapeADMIN <- st_read("admin2013_1.shp")
@@ -84,11 +95,11 @@ do.call(rbind, dataCountList) %>%
     geom_sf() +
     scale_fill_distiller(palette="Spectral") +
     theme_classic() +
-    facet_wrap(~set)
+    facet_wrap(~set, nrow=2)
 
 do.call(rbind, dataCountList[1:3]) %>%
     ggplot(aes(fill=obsCount)) +
     geom_sf() +
     scale_fill_distiller(palette="Spectral") +
     theme_classic() +
-    facet_wrap(~set)
+    facet_wrap(~set, nrow=2)
