@@ -49,9 +49,9 @@ randomSPDF$lat <- randomSPDF@coords[,2]
 
 plot(mesh <- inla.mesh.2d(
     randomSPDF, 
-    cutoff=.5,
+    cutoff=.1,
     max.edge=c(50, 500)))
-proj <- inla.mesh.projector(mesh, dims=c(250, 250))
+proj <- inla.mesh.projector(mesh, dims=c(500, 500))
 
 beta0 <- -1
 sigma0 <-  .6   ## Standard deviation
