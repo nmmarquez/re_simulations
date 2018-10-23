@@ -1,21 +1,24 @@
 rm(list=ls())
 
 library(boot)
-library(tidyverse)
+library(dplyr)
+library(tibble)
+library(ggplot2)
 library(sf)
 library(sp)
 library(INLA)
 library(ar.matrix)
 library(TMB)
 
-mesh2DF <- function(model){
+mesh2DF <- function(model, sdx=NULL){
     if(class(model) == "numeric"){
         x <- model
-        sdx <- rep(NA, length(x))
     }
     else{
         x <- model$z$mu
-        sdx <- model$z$sd
+    }
+    if(is.null(sdx)){
+        sdx <- rep(NA, length(x))
     }
     M <- length(proj$x)
     DT <- data.frame(x=rep(proj$x, M), y=rep(proj$y, each=M), 
@@ -49,9 +52,9 @@ randomSPDF$lat <- randomSPDF@coords[,2]
 
 plot(mesh <- inla.mesh.2d(
     randomSPDF, 
-    cutoff=.1,
+    cutoff=.5,
     max.edge=c(50, 500)))
-proj <- inla.mesh.projector(mesh, dims=c(500, 500))
+proj <- inla.mesh.projector(mesh, dims=c(250, 250))
 
 beta0 <- -1
 sigma0 <-  .6   ## Standard deviation
@@ -68,9 +71,11 @@ Q <- kronecker(Q.AR1(m, 1, rho), Qspde)
 x_ <- matrix(data=c(sim.AR(1, Q)), nrow=mesh$n, ncol=m)
 x <- x_ - mean(x_)
 
-fieldPlot <- bind_rows(lapply(1:m, function(j){
-    mesh2DF(x[,j]) %>%
-        mutate(time=j)})) %>%
+fieldDF <- bind_rows(lapply(1:m, function(j){
+  mesh2DF(x[,j]) %>%
+    mutate(time=j)}))
+
+fieldPlot <- fieldDF %>%
     filter(obsField) %>%
     mutate(p=inv.logit(beta0 + obs)) %>%
     ggplot(aes(x, y, z=p)) +
@@ -150,4 +155,86 @@ runModel <- function(DFpoint=NULL, recompile=F, verbose=F, draws=1000){
     return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
 }
 
-modelRES <- runModel(obsDF, recompile=FALSE, verbose=TRUE)
+if(!file.exists("./modelRES.Rds")){
+  modelRES <- runModel(obsDF, recompile=FALSE, verbose=TRUE)
+  saveRDS(modelRES, "./modelRES.Rds")
+}
+
+modelRES <- readRDS("./modelRES.Rds")
+
+xhat <- matrix(modelRES$z$mu, nrow=mesh$n, ncol=m)
+xsd <- matrix(modelRES$z$sd, nrow=mesh$n, ncol=m)
+phatDF <- bind_rows(lapply(1:m, function(j){
+  mesh2DF(xhat[,j], xsd[,j]) %>%
+    mutate(time=j)})) %>%
+  filter(obsField) %>%
+  mutate(p=inv.logit(modelRES$opt$par[1] + obs)) %>%
+  mutate(plwr=inv.logit(modelRES$opt$par[1] + obs - 1.96*sdx)) %>%
+  mutate(pupr=inv.logit(modelRES$opt$par[1] + obs + 1.96*sdx))
+
+fieldHatPlot <- phatDF %>%
+  ggplot(aes(x, y, z=p)) +
+  geom_raster(aes(fill=p)) + 
+  coord_equal() +
+  theme_void() + 
+  scale_fill_distiller(palette = "Spectral") +
+  facet_wrap(~time)
+
+fieldHatPlot
+
+fieldHatPlot +
+  geom_path(
+    aes(long,lat, group=group, fill=NULL, z=NULL),
+    color="black",
+    size=.1,
+    data=USDF)
+
+modelRES$z %>%
+    mutate(lwr=lwr+mu, upr=mu+upr) %>%
+    mutate(node=rep(1:mesh$n, m)) %>%
+    mutate(time=rep(1:m, each=mesh$n)) %>%
+    filter(node %in% 36:44) %>%
+    ggplot(aes(x=time, y=mu, ymin=lwr, ymax=upr)) +
+    geom_line(linetype=3) +
+    geom_ribbon(alpha=.2) +
+    theme_classic() +
+    facet_wrap(~node) +
+    geom_point(
+        aes(ymin=NULL, ymax=NULL),
+        color="red",
+        shape=8,
+        data=tibble(
+            mu = c(x), 
+            node = rep(1:mesh$n, m), 
+            time = rep(1:m, each=mesh$n)) %>%
+        filter(node %in% 36:42)) +
+    ggtitle("Latent Field Estimates(True Values in Red)")
+
+
+sampGEO <- sample(levels(droplevels(phatDF$GEOID)), 9)
+
+phatDF %>%
+    select(GEOID, time, p, plwr, pupr) %>%
+    group_by(GEOID, time) %>%
+    summarize_all(mean) %>%
+    ungroup %>%
+    mutate(GEOID=droplevels(GEOID)) %>%
+    filter(GEOID %in% sampGEO) %>%
+    ggplot(aes(x=time, y=p, ymin=plwr, ymax=pupr)) +
+    geom_line(linetype=3) +
+    geom_ribbon(alpha=.2) +
+    theme_classic() +
+    facet_wrap(~GEOID) +
+    ggtitle("Aggregated Probabilities(True Probabilities in Red)") +
+    geom_point(
+      aes(ymin=NULL, ymax=NULL),
+      color="red",
+      shape=8,
+      data=fieldDF %>%
+        filter(GEOID %in% sampGEO) %>%
+        mutate(p=inv.logit(beta0 + obs)) %>%
+        select(GEOID, time, p) %>%
+        group_by(GEOID, time) %>%
+        summarize_all(mean))
+
+
