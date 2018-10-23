@@ -1,5 +1,6 @@
 rm(list=ls())
 
+.libPaths(c("/homes/nmarquez/R3.5", .libPaths()))
 library(boot)
 library(dplyr)
 library(tibble)
@@ -58,12 +59,12 @@ proj <- inla.mesh.projector(mesh, dims=c(250, 250))
 
 beta0 <- -1
 sigma0 <-  .6   ## Standard deviation
-range0 <- 1.5 ## Spatial range
+range0 <- 1.5 ## Spatial range compare(high spatial range vs low (1.5, 3))
 kappa0 <- sqrt(8) / range0
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0)
 spde <- inla.spde2.matern(mesh)
 m <- 9 # time periods
-rho <- .93 # temporal autocorrelation
+rho <- .93 # temporal autocorrelation again compare (.13, .93)
 Qspde <- tau0**2 * (kappa0**4 * spde$param.inla$M0 + 
                         2 * kappa0**2 *spde$param.inla$M1 + spde$param.inla$M2)
 
@@ -113,7 +114,7 @@ runModel <- function(DFpoint=NULL, recompile=F, verbose=F, draws=1000){
     Data <- list(
         yPoint=DFpoint$obs, denomPoint=DFpoint$denom, AprojPoint=AprojPoint,
         M0=spde$param.inla$M0, M1=spde$param.inla$M1, M2=spde$param.inla$M2,
-        timem=m)
+        timem=m, spacem=mesh$n)
     
     Params <- list(
         beta0=0, log_tau=0, log_kappa=0, z=rep(0, nrow(Q)), logit_rho=0
@@ -155,12 +156,7 @@ runModel <- function(DFpoint=NULL, recompile=F, verbose=F, draws=1000){
     return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
 }
 
-if(!file.exists("./modelRES.Rds")){
-  modelRES <- runModel(obsDF, recompile=FALSE, verbose=TRUE)
-  saveRDS(modelRES, "./modelRES.Rds")
-}
-
-modelRES <- readRDS("./modelRES.Rds")
+modelRES <- runModel(obsDF, recompile=FALSE, verbose=TRUE)
 
 xhat <- matrix(modelRES$z$mu, nrow=mesh$n, ncol=m)
 xsd <- matrix(modelRES$z$sd, nrow=mesh$n, ncol=m)
@@ -200,14 +196,14 @@ modelRES$z %>%
     theme_classic() +
     facet_wrap(~node) +
     geom_point(
-        aes(ymin=NULL, ymax=NULL),
-        color="red",
+        aes(ymin=NULL, ymax=NULL, color=Observed),
         shape=8,
         data=tibble(
             mu = c(x), 
             node = rep(1:mesh$n, m), 
             time = rep(1:m, each=mesh$n)) %>%
-        filter(node %in% 36:42)) +
+          filter(node %in% 36:42) %>%
+          mutate(Observed=!(time %in% 5:6))) +
     ggtitle("Latent Field Estimates(True Values in Red)")
 
 
@@ -227,14 +223,14 @@ phatDF %>%
     facet_wrap(~GEOID) +
     ggtitle("Aggregated Probabilities(True Probabilities in Red)") +
     geom_point(
-      aes(ymin=NULL, ymax=NULL),
-      color="red",
+      aes(ymin=NULL, ymax=NULL, color=Observed),
       shape=8,
       data=fieldDF %>%
         filter(GEOID %in% sampGEO) %>%
         mutate(p=inv.logit(beta0 + obs)) %>%
         select(GEOID, time, p) %>%
         group_by(GEOID, time) %>%
-        summarize_all(mean))
+        summarize_all(mean) %>%
+        mutate(Observed=!(time %in% 5:6)))
 
 

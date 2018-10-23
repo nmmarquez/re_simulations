@@ -44,6 +44,7 @@ Type objective_function<Type>::operator() ()
     
     //time periods
     DATA_INTEGER(timem);
+    DATA_INTEGER(spacem);
     
     // SPDE objects
     DATA_SPARSE_MATRIX(M0);
@@ -70,10 +71,22 @@ Type objective_function<Type>::operator() ()
     // printf("%s\n", "Evaluate random effects.");
     
     SparseMatrix<Type> Qspde = spde_Q(log_kappa, log_tau, M0, M1, M2);
-    SparseMatrix<Type> Qar = ar_Q(timem, rho, Type(1.));
+    //SparseMatrix<Type> Qar = ar_Q(timem, rho, Type(1.));
     
     // printf("%s\n", "Evaluating likelihood of RE latent field.");
-    nll += GMRF(kronecker(Qar, Qspde))(z);
+    array<Type> zmat(spacem, timem);
+    zmat << z;
+    
+    // Initially I tried doing this while testing out the kronecker function
+    // and the speed differences were insane. A model that used seperable 
+    // ran in a couple minutes while the kronecker version took like 3 hours
+    // Im guessing this is because of the way that the sparseness detection
+    // algorithm works with GMRF and is propegated with scale. This does not 
+    // work with kronecker and thus a much large matrix must be searched for 
+    // sparseness. 
+    
+    //nll += GMRF(kronecker(Qar, Qspde))(z);
+    nll += SEPARABLE(AR1(rho), GMRF(Qspde))(zmat);
     
     vector<Type> projPoint = AprojPoint * z;
     
