@@ -64,8 +64,11 @@ Type objective_function<Type>::operator() ()
     // printf("%s\n", "Evaluating likelihood of RE latent field.");
     nll += GMRF(Q)(z);
     
+    // printf("%s\n", "Matrix Mult 1.");
     vector<Type> projPoint = AprojPoint * z;
+    // printf("%s\n", "Matrix Mult 2.");
     vector<Type> projLatObs = AprojObs * z + beta0;
+    // printf("%s\n", "Matrix Mult 3.");
     vector<Type> projPObs = exp(projLatObs) / (Type(1.) + exp(projLatObs));
     SparseMatrix<Type> RAprojPoly = AprojPoly.transpose();
     vector<Type> projPoly = RAprojPoly * projPObs;

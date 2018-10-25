@@ -49,7 +49,7 @@ runModel <- function(y, option){
         random = "zeta",
         DLL = "ar1"
     )
-    
+    runSymbolicAnalysis(Obj)
     Opt <- nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr)
     
     sdrep <- sdreport(Obj, getJointPrecision = T)
@@ -61,7 +61,7 @@ runModel <- function(y, option){
     list(obj=Obj, opt=Opt, sdrep=sdrep, runtime=run_time)
 }
 
-models <- c(sequence=0, GMRF=1, builtAR1=2)#, MVNM=3)
+models <- c(sequence=0, GMRF=1, builtAR1=2, MVNM=3)
 
 modelFits <- lapply(models[1:3], function(i) runModel(yobs, i))
 
