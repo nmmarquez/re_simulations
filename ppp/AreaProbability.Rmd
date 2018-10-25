@@ -53,7 +53,7 @@ The models parameters may be estimated using one of several hierarchical modelin
 $$
 k \in \{ 1, \dots , m \} \\
 l \in \mathbb{R} \\
-Y_k \sim \mathcal{N}(\hat{y}_k, \sigma_\epsilon) \\
+Y_k \sim \mathcal{N}(\hat{y}_k, \sqrt{\sigma_\epsilon^2 + f(\langle \langle \mathcal{A}_k \rangle \rangle, \kappa, \sigma_\eta, \nu)}) \\
 \hat{y}_k = \beta_0 + \frac{\int_{\forall l \in \mathcal{A}_k} \eta(s_l)ds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
 $$
 
@@ -92,6 +92,8 @@ pacman::p_load(INLA, ggplot2, data.table, lattice, arm, dplyr, TMB,
                ar.matrix, dtplyr)
 set.seed(124)
 
+# apply a set of values from the mesh to the projected surface and convert
+# to a dataframe. Works for both vectors and fitted models.
 mesh2DF <- function(model){
     if(class(model) == "numeric"){
         x <- model
@@ -121,23 +123,27 @@ mesh2DF <- function(model){
         as.data.table
 }
 
-# what is the shape that we are dealing with?
+# Do some shape cleaning
 row.names(US.df@data) <- 1:nrow(US.df)
 US.df$id <- 1:nrow(US.df)
 USDF <- fortify(US.df, region="id") %>%
     mutate(id=as.numeric(id)) %>%
     left_join(US.df@data, by="id")
 
+ # randomly sample from the space to build first mesh and true underlying field
 randomSPDF <- spsample(US.df, 800, "random")
 randomSPDF$long <- randomSPDF@coords[,1]
 randomSPDF$lat <- randomSPDF@coords[,2]
 
+# create the mesh
 mesh <- inla.mesh.2d(
     randomSPDF, 
     cutoff=.1,
     max.edge=c(50, 500))
+# create the projector object down to a 500 by 500 grid
 proj <- inla.mesh.projector(mesh, dims=c(500, 500))
 
+# set up the parameter values
 beta0 <- -1
 sigma0 <-  .6   ## Standard deviation
 range0 <- 1.5 ## Spatial range
@@ -145,11 +151,15 @@ kappa0 <- sqrt(8) / range0
 tau0 <- 1/(sqrt(4*pi)*kappa0*sigma0)
 spde <- inla.spde2.matern(mesh)
 
+# set up the spatial GMRF approximation, this will need to change to an
+# actual matern GP later
 Q <- tau0**2 * (kappa0**4 * spde$param.inla$M0 + 
                      2 * kappa0**2 *spde$param.inla$M1 + spde$param.inla$M2)
+# simulate and demmean data
 x_ <- as.vector(sim.AR(n=1, Q))
 x <- x_ - mean(x_)
 
+# project ont full space and plot
 simValues <- mesh2DF(x)
 
 simValues %>%
@@ -177,7 +187,7 @@ countyRiskDF <- simValues %>%
 For this example we will make the simplifying assumption that populations are evenly distributed in space and therefore any areal units probability of an event occurring is simply its average across space. We may then aggregate the underlying probabilities to calculate the probabilities of events at the county level shown in the map below.
 
 ```{r cmap, message=FALSE, warning=FALSE, echo=FALSE}
-N <- 1200
+N <- 1200 # number of points observed
 
 countyRiskDF %>%
     right_join(USDF, by="id", copy=T) %>%
@@ -195,9 +205,13 @@ In a traditional underlying latent field model approach we would estimate the un
 
 ```{r firstfield, echo=F, message=F, warning=F}
 # Just get the observed Aproj since thats what we care about for likelihood
+# dim(AprojObs)
 AprojObs <- proj$proj$A[simValues$obsField,]
 
 # create matrix for which points fall within areal unit
+# creates a projection for each polygon
+# dim(AprojPoly)
+# table(AprojPoly[,1])
 AprojPoly <- Matrix(
     sparse = T, 
     data = sapply(1:nrow(US.df@data), function(i){
@@ -272,6 +286,7 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
     return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
 }
 
+# simulate points only
 obsPoints <- spsample(US.df, N, "random")
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
 obsDF <- data.table(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
@@ -333,35 +348,24 @@ sample_ids <- function(df){
 
 
 # now lets try adding in some polygons to the equation
-obsPolyMixDF <- simValues %>%
-    filter(obsField) %>%
-    mutate(p=invlogit(beta0 + obs)) %>% 
-    select(id, p) %>%
-    as.data.frame %>%
+obsPolyMixDF <- simValues %>% # start with sim field
+    filter(obsField) %>% # restrict to observed filed
+    mutate(p=invlogit(beta0 + obs)) %>% # claculate the p of the observed field
+    select(id, p) %>% # restrict only to those two columns
+    as.data.frame %>% # merge on the randomly selected polygons and their denom
     left_join(data.frame(
         id = sample(US.df$id, size=round(nrow(US.df@data)/2))) %>%
         left_join(obsDF) %>%
         group_by(id) %>%
         summarize(denom=sum(denom))) %>%
     filter(!is.na(denom)) %>%
-    sample_ids %>%
-    mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
+    sample_ids %>% # sample w/ replacement from each id equal to the denom size 
+    mutate(obs=rbinom(n(), size=denom, prob=p)) %>% # simulate
     select(-p) %>%
-    group_by(id) %>%
+    group_by(id) %>% # aggregate to the polygon level
     summarize_all(sum) %>%
     mutate(loc=id-1) %>%
     left_join(select(countyRiskDF, id, cells))
-
-
-obsPolyMixDF <- data.frame(
-    id=sample(US.df$id, size=round(nrow(US.df@data)/2))) %>%
-    left_join(obsDF) %>%
-    group_by(id) %>%
-    summarize(denom=sum(denom, na.rm=T)) %>%
-    left_join(countyRiskDF) %>%
-    mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
-    mutate(loc=id-1) %>%
-    filter(!is.na(denom))
 
 obsPointMixDF <- obsDF %>% 
     as.data.frame %>% 
@@ -422,13 +426,24 @@ rbind(
 In fact we do not need any point data at all in order to make estimates that of the underlying field because of their correlation. In the next simulation we remove all point data and only use polygon data, however, still estimate the random effects with the SPDE approach. While this may seem trivial, this approach would enable analysts to combine data from overlapping or changing areal data into a single model without having to simplify their data by combining polygons as is common in the literature. The results below show how the model is still able to approximate the underlying field well. 
 
 ```{r polymodel, echo=F, message=F, warning=F}
-obsPolyDF <- obsDF %>%
-    group_by(id) %>%
-    summarize(denom=sum(denom)) %>%
-    left_join(countyRiskDF) %>%
+obsPolyDF <- simValues %>%
+    filter(obsField) %>%
+    mutate(p=invlogit(beta0 + obs)) %>% 
+    select(id, p) %>%
+    as.data.frame %>%
+    left_join(US.df@data %>%
+        select(id) %>%
+        left_join(obsDF) %>%
+        group_by(id) %>%
+        summarize(denom=sum(denom))) %>%
+    filter(!is.na(denom)) %>%
+    sample_ids %>%
     mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
+    select(-p) %>%
+    group_by(id) %>%
+    summarize_all(sum) %>%
     mutate(loc=id-1) %>%
-    filter(!is.na(denom))
+    left_join(select(countyRiskDF, id, cells))
 
 simPolyOnly <- runModel(NULL, obsPolyDF, recompile=F, symboic=F)
 estValuesPoly <- mesh2DF(simPolyOnly)
