@@ -24,3 +24,12 @@ bind_rows(lapply(seq(.09, .04, by=-.01), function(i){
     facet_wrap(~bandwidth) +
     guides(fill=FALSE) +
     ggtitle("KDE with varying Bandwidth")
+
+## Single plot
+dsub <- kde2d(a, b, n=N, h=.03)
+tibble(z=c(dsub$z), x=rep(dsub$x, N), y=rep(dsub$y, each=N)) %>%
+    ggplot(aes(x=x, y=y, fill=z)) +
+    geom_raster() +
+    scale_fill_gradientn(colors=clrs(27)) +
+    theme_classic() +
+    ggtitle("KDE with varying Bandwidth")
