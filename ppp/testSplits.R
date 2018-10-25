@@ -75,3 +75,10 @@ if(!file.exists("~/Documents/re_simulations/ppp/polysList.Rds")){
 }
 
 polysList <- read_rds("~/Documents/re_simulations/ppp/polysList.Rds")
+
+par(mfrow=c(2,2))
+plot(polysList$`10`)
+plot(polysList$`50`)
+plot(polysList$`100`)
+plot(polysList$`200`)
+par(mfrow=c(1,1))
