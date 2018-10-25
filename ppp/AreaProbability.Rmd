@@ -187,8 +187,6 @@ countyRiskDF <- simValues %>%
 For this example we will make the simplifying assumption that populations are evenly distributed in space and therefore any areal units probability of an event occurring is simply its average across space. We may then aggregate the underlying probabilities to calculate the probabilities of events at the county level shown in the map below.
 
 ```{r cmap, message=FALSE, warning=FALSE, echo=FALSE}
-N <- 1200 # number of points observed
-
 countyRiskDF %>%
     right_join(USDF, by="id", copy=T) %>%
     ggplot +
@@ -199,31 +197,13 @@ countyRiskDF %>%
     theme_void() +
     scale_fill_distiller(palette = "Spectral") +
     labs(fill="Probability", title="County Level Probability")
+
+N <- 1200 # number of points observed placed here for reference in text
 ```
 
 In a traditional underlying latent field model approach we would estimate the underlying field by observing points over space and taking an SPDE approach, modeling the points as a function of a gaussian markov random field that closely approximates a gaussian process. To do so we need to triangulate a mesh from which we may estimate random effects from and project to any other point on the field as described in Lindgren et al. Below are a set of `r N` points and where they appear in space in relation to US counties as well as their positioning o the estimated mesh. 
 
 ```{r firstfield, echo=F, message=F, warning=F}
-# Just get the observed Aproj since thats what we care about for likelihood
-# dim(AprojObs)
-AprojObs <- proj$proj$A[simValues$obsField,]
-
-# create matrix for which points fall within areal unit
-# creates a projection for each polygon
-# dim(AprojPoly)
-# table(AprojPoly[,1])
-AprojPoly <- Matrix(
-    sparse = T, 
-    data = sapply(1:nrow(US.df@data), function(i){
-        pix <- rep(0, nrow(AprojObs))
-        ones <- simValues %>%
-            filter(id==i) %>%
-            select(obsAproj) %>%
-            unlist %>%
-            unname
-        pix[ones] <- 1/length(ones)
-        pix
-    }))
 
 runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
                      symboic=T, draws=1000){
@@ -247,7 +227,7 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
         AprojPoint=AprojPoint, AprojPoly=AprojPoly, AprojObs=AprojObs)
     
     Params <- list(
-        beta0=0, log_tau=0, log_kappa=0, z=rep(0, nrow(Q))
+        beta0=0, log_tau=0, log_kappa=0, z=rep(0, mesh$n)
     )
     
     dyn.load(dynlib(model))
@@ -286,11 +266,44 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
     return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
 }
 
+mesh.old <- mesh
+proj.old <- proj
+spde.old <- spde
+
 # simulate points only
 obsPoints <- spsample(US.df, N, "random")
+# create the mesh
+mesh <- inla.mesh.2d(
+    spsample(US.df, 800, "random"), 
+    cutoff=.1,
+    max.edge=c(50, 500))
+spde <- inla.spde2.matern(mesh)
+# create the projector object down to a 500 by 500 grid
+proj <- inla.mesh.projector(mesh, dims=c(500, 500))
+# Just get the observed Aproj since thats what we care about for likelihood
+# dim(AprojObs)
+AprojObs <- proj$proj$A[simValues$obsField,]
+
+# create matrix for which points fall within areal unit
+# creates a projection for each polygon
+# dim(AprojPoly)
+# table(AprojPoly[,1])
+AprojPoly <- Matrix(
+    sparse = T, 
+    data = sapply(1:nrow(US.df@data), function(i){
+        pix <- rep(0, nrow(AprojObs))
+        ones <- simValues %>%
+            filter(id==i) %>%
+            select(obsAproj) %>%
+            unlist %>%
+            unname
+        pix[ones] <- 1/length(ones)
+        pix
+    }))
+AprojPoint.old <- inla.spde.make.A(mesh=mesh.old, loc=obsPoints)
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
 obsDF <- data.table(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
-    mutate(re=as.vector(AprojPoint %*% x), denom=rpois(N, 100)) %>%
+    mutate(re=as.vector(AprojPoint.old %*% x), denom=rpois(N, 100)) %>%
     mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob)) %>%
     cbind(select(over(obsPoints, US.df), id))
 
