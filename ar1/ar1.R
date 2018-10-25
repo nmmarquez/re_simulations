@@ -4,7 +4,7 @@ library(tidyverse)
 
 
 # simulate some easy peasy data
-N <- 50000
+N <- 20000
 sigma_epsilon <- .2
 sigma_ar <- .5
 rho_ar <- .92
@@ -49,7 +49,7 @@ runModel <- function(y, option){
         random = "zeta",
         DLL = "ar1"
     )
-    
+    runSymbolicAnalysis(Obj)
     Opt <- nlminb(start=Obj$par, objective=Obj$fn, gradient=Obj$gr)
     
     sdrep <- sdreport(Obj, getJointPrecision = T)
@@ -61,9 +61,9 @@ runModel <- function(y, option){
     list(obj=Obj, opt=Opt, sdrep=sdrep, runtime=run_time)
 }
 
-models <- c(sequence=0, GMRF=1, builtAR1=2)#, MVNM=3)
+models <- c(sequence=0, GMRF=1, builtAR1=2, MVNM=3)
 
-modelFits <- lapply(models[1:4], function(i) runModel(yobs, i))
+modelFits <- lapply(models[1:3], function(i) runModel(yobs, i))
 
 sapply(modelFits, function(x) x$opt$par)
 sapply(modelFits, function(x) x$runtime)

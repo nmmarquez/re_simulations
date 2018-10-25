@@ -319,12 +319,45 @@ rbind(
     facet_wrap(~type) +
     labs(title="Estimation of Underlying Latent Field")
 
+sample_ids <- function(df){
+    dfID <- unique(select(df, id, denom))
+    bind_rows(lapply(1:nrow(dfID), function(i){
+        id_i <- dfID$id[i]
+        denom_i <- dfID$denom[i]
+        df %>%
+            filter(id == id_i) %>%
+            sample_n(denom_i, replace=T) %>%
+            mutate(denom=1)
+    }))
+}
+
+
 # now lets try adding in some polygons to the equation
+obsPolyMixDF <- simValues %>%
+    filter(obsField) %>%
+    mutate(p=invlogit(beta0 + obs)) %>% 
+    select(id, p) %>%
+    as.data.frame %>%
+    left_join(data.frame(
+        id = sample(US.df$id, size=round(nrow(US.df@data)/2))) %>%
+        left_join(obsDF) %>%
+        group_by(id) %>%
+        summarize(denom=sum(denom))) %>%
+    filter(!is.na(denom)) %>%
+    sample_ids %>%
+    mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
+    select(-p) %>%
+    group_by(id) %>%
+    summarize_all(sum) %>%
+    mutate(loc=id-1) %>%
+    left_join(select(countyRiskDF, id, cells))
+
+
 obsPolyMixDF <- data.frame(
     id=sample(US.df$id, size=round(nrow(US.df@data)/2))) %>%
     left_join(obsDF) %>%
     group_by(id) %>%
-    summarize(denom=sum(denom)) %>%
+    summarize(denom=sum(denom, na.rm=T)) %>%
     left_join(countyRiskDF) %>%
     mutate(obs=rbinom(n(), size=denom, prob=p)) %>%
     mutate(loc=id-1) %>%
