@@ -47,7 +47,7 @@ data.frame(
 
 # something seems off so lets try a new experiment where we check bias of estimator
 M <- 50
-N <- 100000
+N <- 10000
 sigma.iid <- sqrt(100)
 Q <- diag(rep(sigma.iid^-2, M))
 Sigma <- diag(rep(sigma.iid^-2, M))
