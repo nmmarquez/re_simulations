@@ -508,17 +508,6 @@ How well the underlying field can be estimated is largely a function of how gran
 
 ```{r uncert, echo=F, message=F, warning=F}
 rbind(
-    mutate(estValuesMix, type="Mix"),
-    mutate(estValues, type="Points"),
-    mutate(estValuesPoly, type="Poly")) %>%
-    filter(obsField) %>%
-    select(type, x, y, sdx, obs) %>%
-    gather(variable, value, -(type:y)) %>%
-    unite(temp, type, variable) %>%
-    spread(temp, value)
-
-
-rbind(
     mutate(estValuesMix, type="Estimated with Mix"),
     mutate(estValues, type="Estimated with Points Only"),
     mutate(estValuesPoly, type="Estimated with Polygons Only")) %>%
