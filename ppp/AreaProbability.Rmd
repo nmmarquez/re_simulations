@@ -88,8 +88,15 @@ We begin by testing the validity of our methodology by comparing results from a 
 
 ```{r loads, message=FALSE, warning=FALSE, echo=FALSE}
 rm(list=ls())
-pacman::p_load(INLA, ggplot2, data.table, lattice, arm, dplyr, TMB, 
-               ar.matrix, dtplyr)
+library(ggplot2)
+library(arm)
+library(dplyr)
+library(tidyr)
+library(TMB)
+# install.packages("INLA", repos=c(getOption("repos"), INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+library(INLA)
+# devtools::install_github("https://github.com/nmmarquez/ar.matrix")
+library(ar.matrix)
 set.seed(124)
 
 # apply a set of values from the mesh to the projected surface and convert
@@ -104,13 +111,12 @@ mesh2DF <- function(model){
         sdx <- model$z$sd
     }
     M <- length(proj$x)
-    DT <- data.table(x=rep(proj$x, M), y=rep(proj$y, each=M), 
+    DT <- data.frame(x=rep(proj$x, M), y=rep(proj$y, each=M), 
                      obs=c(inla.mesh.project(proj, field=x)),
                      sdx=c(inla.mesh.project(proj, field=sdx)))
     expand.grid(proj$x, proj$y) %>%
         SpatialPoints(US.df@proj4string) %>%
         over(US.df) %>%
-        as.data.table %>%
         cbind(DT) %>%
         mutate(aproj=1:n(), obsField=!is.na(id)) %>%
         group_by(obsField) %>%
@@ -119,8 +125,7 @@ mesh2DF <- function(model){
         as_tibble %>%
         mutate(stateID=group_indices(., STATEFP)) %>%
         mutate(stateID=ifelse(!obsField, NA, stateID)) %>%
-        mutate(obsAproj=ifelse(!obsField, NA, obsAproj)) %>%
-        as.data.table
+        mutate(obsAproj=ifelse(!obsField, NA, obsAproj))
 }
 
 # Do some shape cleaning
@@ -162,7 +167,7 @@ x <- x_ - mean(x_)
 # project ont full space and plot
 simValues <- mesh2DF(x)
 
-simValues %>%
+fieldPlot <- simValues %>%
     filter(obsField) %>%
     mutate(p=invlogit(beta0 + obs)) %>%
     ggplot(aes(x, y, z=p)) +
@@ -182,12 +187,14 @@ countyRiskDF <- simValues %>%
     filter(obsField) %>%
     group_by(id) %>%
     summarize(p=mean(invlogit(beta0 + obs), na.rm=T), cells=n())
+
+fieldPlot
 ```
 
 For this example we will make the simplifying assumption that populations are evenly distributed in space and therefore any areal units probability of an event occurring is simply its average across space. We may then aggregate the underlying probabilities to calculate the probabilities of events at the county level shown in the map below.
 
 ```{r cmap, message=FALSE, warning=FALSE, echo=FALSE}
-countyRiskDF %>%
+countyPlot <- countyRiskDF %>%
     right_join(USDF, by="id", copy=T) %>%
     ggplot +
     aes(long,lat,group=group,fill=p) + 
@@ -197,6 +204,8 @@ countyRiskDF %>%
     theme_void() +
     scale_fill_distiller(palette = "Spectral") +
     labs(fill="Probability", title="County Level Probability")
+
+countyPlot
 
 N <- 1200 # number of points observed placed here for reference in text
 ```
@@ -211,11 +220,11 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
     #compile(paste0(model, ".cpp"))
     if(is.null(DFpoly)){
         empty <- vector("integer") 
-        DFpoly <- data.table(obs=empty, denom=empty, loc=empty, long=empty)
+        DFpoly <- data.frame(obs=empty, denom=empty, loc=empty, long=empty)
     }
     if(is.null(DFpoint)){
         empty <- vector("integer") 
-        DFpoint <- data.table(obs=empty, denom=empty, lat=empty, long=empty)
+        DFpoint <- data.frame(obs=empty, denom=empty, lat=empty, long=empty)
     }
     AprojPoint <- inla.spde.make.A(
         mesh=mesh, 
@@ -300,14 +309,15 @@ AprojPoly <- Matrix(
         pix[ones] <- 1/length(ones)
         pix
     }))
+
 AprojPoint.old <- inla.spde.make.A(mesh=mesh.old, loc=obsPoints)
 AprojPoint <- inla.spde.make.A(mesh=mesh, loc=obsPoints)
-obsDF <- data.table(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
+obsDF <- data.frame(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
     mutate(re=as.vector(AprojPoint.old %*% x), denom=rpois(N, 100)) %>%
     mutate(prob=invlogit(beta0 + re), obs=rbinom(N, denom, prob)) %>%
     cbind(select(over(obsPoints, US.df), id))
 
-USDF %>%
+obsPointPlot <- USDF %>%
     ggplot +
     aes(long,lat,group=group) + 
     geom_path(color="black", size=.1) +
@@ -320,6 +330,7 @@ USDF %>%
         size=.5) +
     labs(title="Points Observed In US")
 
+obsPointPlot
 plot(mesh, main="Points Observed On Mesh")
 points(obsPoints@coords, col="red", pch=21, cex=.2)
 ```
@@ -497,6 +508,17 @@ How well the underlying field can be estimated is largely a function of how gran
 
 ```{r uncert, echo=F, message=F, warning=F}
 rbind(
+    mutate(estValuesMix, type="Mix"),
+    mutate(estValues, type="Points"),
+    mutate(estValuesPoly, type="Poly")) %>%
+    filter(obsField) %>%
+    select(type, x, y, sdx, obs) %>%
+    gather(variable, value, -(type:y)) %>%
+    unite(temp, type, variable) %>%
+    spread(temp, value)
+
+
+rbind(
     mutate(estValuesMix, type="Estimated with Mix"),
     mutate(estValues, type="Estimated with Points Only"),
     mutate(estValuesPoly, type="Estimated with Polygons Only")) %>%
@@ -513,4 +535,32 @@ rbind(
         data=USDF) +
     facet_wrap(~type, nrow = 2) +
     labs(title="Latent Field Uncertainty", fill="Standard\nDeviation")
+```
+
+```{R diagnos, echo=F, message=F, warning=F, eval=F}
+AprojMesh2Mesh <- inla.spde.make.A(
+        mesh=mesh, 
+        loc=mesh.old$loc)
+
+bind_rows(lapply(list(simPointsOnly, simPPMix, simPolyOnly), function(x){
+    data.frame(
+        x=mesh.old$loc[,1], y=mesh.old$loc[,2], 
+        obs=as.vector(AprojMesh2Mesh %*% x$z$mu),
+        sdx=as.vector(AprojMesh2Mesh %*% x$z$sd)) %>%
+        cbind(mesh.old$loc %>%
+                  SpatialPoints(US.df@proj4string) %>%
+                  over(US.df) %>% 
+                  select(GEOID))})) %>%
+    mutate(model=rep(c("Points", "Mix", "Poly"), each=mesh.old$n)) %>%
+    rename(est=obs) %>%
+    mutate(true.Val=rep(x_, 3)) %>%
+    filter(!is.na(GEOID)) %>%
+    group_by(model) %>%
+    summarize(
+        corr=cor(est, true.Val),
+        rmse=mean(sqrt((est-true.Val)^2)),
+        cov=mean(((est-1.96*sdx) <= true.Val) & 
+                     ((est+1.96*sdx) >= true.Val))) %>%
+    mutate(model=factor(model, levels=c("Points", "Mix", "Poly"))) %>%
+    arrange(model)
 ```
