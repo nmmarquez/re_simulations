@@ -106,7 +106,14 @@ AprojPoint <- inla.spde.make.A(
 
 obsDF <- tibble(long=obsPoints@coords[,1], lat=obsPoints@coords[,2]) %>%
     mutate(re=as.vector(AprojPoint %*% c(x)), denom=rpois(N, 100)) %>%
-    mutate(prob=inv.logit(beta0 + re), obs=rbinom(N, denom, prob))
+    mutate(prob=inv.logit(beta0 + re), obs=rbinom(N, denom, prob)) %>%
+    mutate(time=obsPoints$time)
+
+obsDF %>%
+    ggplot(aes(lat, long)) +
+    geom_point(size=) +
+    theme_classic() +
+    facet_wrap(~time)
 
 runModel <- function(DFpoint=NULL, recompile=F, verbose=F, draws=1000){
     model <- "st"
