@@ -1,0 +1,97 @@
+---
+title: "Spatial Models and Areal Unit Observations For Demographic Health Data"
+author: Neal Marquez
+date: October 31st, 2018
+output: ioslides_presentation
+---
+
+# Background
+
+## The Demand for High Resolution Geospatial Data
+
+- National Averages Mask Inequalities
+- Arbitrary Areal Units Can Do the Same
+- Geospatial Inequalities Highlight Known Spatial Clusters of Other Clusters
+    - SocioEconomic
+    - Demographic
+    - Cultural
+
+## Data Limitations
+
+- Data often does not come to us geo-referenced (Point)
+- Methods have been developed for Areal and Point Data but not both
+- Unclear on how we move between these two spaces
+
+## Current Approaches
+
+- Redistribution of Data Across Polygon of Source
+- Joint Model Using Areal methods(LCAR) alongside Point methods(SPDE)
+- Only use data of one type
+
+## Problems
+- Redistribution of Data Across Polygon of Source
+    - Susceptible to spurious covariate correlations
+    - Over-Confidence in redistributed areas
+- Joint Model Using Areal methods(LCAR) alongside Point methods(SPDE)
+    - Does not reflect the data generation process
+    - Covariate interpretation susceptible to MAU problem
+- Only use data of one type
+    - Ignores information
+
+# Proposal: Modification of Spatial Model Likelihood for Areal Response Data
+
+## Traditional Continuous Spatial Model
+
+- The Data Generating process
+$$
+\boldsymbol{Y} \sim \mathcal{GP}(\mu_\text{Constant}(\beta_0), K_{\text{Matern}}(\kappa, \sigma_\eta, \nu) + K_{\text{White}}(\sigma_\epsilon)) \\
+$$
+
+- GMRF Approximation
+$$
+i,j \in \{1, \dots, n\}\\
+Y_i \sim \mathcal{N}(\beta_0 + \eta(s_i), \sigma_\epsilon) \\
+\boldsymbol{\eta} \sim \text{MVN}(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
+\Sigma_{ij} = \frac{\sigma^2_\eta}{2^{\nu-1} \Gamma(\nu)}
+    (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
+\Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j)) \\
+$$
+
+## Extension to Areal Units  
+$$
+k \in \{ 1, \dots , m \} \\
+l \in \mathbb{R} \\
+Y_k \sim \mathcal{N}(\hat{y}_k, \sqrt{\sigma_\epsilon^2 + f(\langle \langle \mathcal{A}_k \rangle \rangle, \kappa, \sigma_\eta, \nu)}) \\
+\hat{y}_k = \beta_0 + \frac{\int_{\forall l \in \mathcal{A}_k} \eta(s_l)ds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
+$$
+
+## Non Linear Binomial Likelihood of Points in Space
+$$
+i,j \in \{1, \dots, n\}\\
+Y_i \sim \text{Binomial}(N_i, \hat{p}_i) \\
+\text{logit}(\hat{p}_i) = X_i \boldsymbol{\beta} + \eta(s_i)  \\
+\boldsymbol{\eta} \sim \text{MVN}(\boldsymbol{0}, \boldsymbol{\Sigma}) \\
+\Sigma_{ij} = \frac{\sigma^2_\eta}{2^{\nu-1} \Gamma(\nu)}
+    (\kappa ||s_i - s_j||)^\nu K_\nu(\kappa ||s_i - s_j||) \\
+\Sigma_{ij} = \text{Cov}(\eta(s_i) , \eta(s_j))
+$$
+
+## Predictions of Evenly Distributed Population Areal Unit
+$$
+k \in \{ 1, \dots , m \} \\
+l \in \mathbb{R} \\
+Y_k \sim \text{Binomial}(N_k, \hat{p}_k) \\
+\hat{p}_k = \frac{\int_{\forall l \in \mathcal{A}_k} \hat{p}_lds}{\langle \langle \mathcal{A}_k \rangle \rangle} \\
+\hat{p}_k \approx \frac{\sum_l \hat{p}_l \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}=\frac{\sum_l \text{inv.logit}\big(X_l \boldsymbol{\beta} + \eta(s_l) \big) \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}
+$$
+
+---
+
+```{r, cars, fig.cap="A scatterplot.", echo=FALSE}
+plot(cars)
+```
+
+## Going to sleep
+
+- Get in bed
+- Count sheep
