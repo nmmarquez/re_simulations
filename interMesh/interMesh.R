@@ -1,6 +1,5 @@
 rm(list=ls())
 
-.libPaths(c("/homes/nmarquez/R3.5", .libPaths()))
 library(boot)
 library(dplyr)
 library(tibble)
