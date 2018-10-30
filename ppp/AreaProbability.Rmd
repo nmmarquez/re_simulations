@@ -97,6 +97,7 @@ library(TMB)
 library(INLA)
 # devtools::install_github("https://github.com/nmmarquez/ar.matrix")
 library(ar.matrix)
+library(inlabru)
 set.seed(124)
 
 # apply a set of values from the mesh to the projected surface and convert
@@ -135,7 +136,7 @@ USDF <- fortify(US.df, region="id") %>%
     mutate(id=as.numeric(id)) %>%
     left_join(US.df@data, by="id")
 
- # randomly sample from the space to build first mesh and true underlying field
+# randomly sample from the space to build first mesh and true underlying field
 randomSPDF <- spsample(US.df, 800, "random")
 randomSPDF$long <- randomSPDF@coords[,1]
 randomSPDF$lat <- randomSPDF@coords[,2]
@@ -263,16 +264,23 @@ runModel <- function(DFpoint=NULL, DFpoly=NULL, recompile=F, verbose=F,
         runtime <- as.numeric(runtime)
     }
     zindex <- "z" == row.names(sdrep$jointPrecision)
-    Qz <- sdrep$jointPrecision[zindex,zindex]
-    Zdraws <- sim.AR(draws, Qz)
+    ParDraws <- sim.AR(draws, sdrep$jointPrecision)
     Report <- Obj$report()
+    bhat <- Opt$par[1]
     zDF <- tibble(
         mu=Report$z,
-        sd=apply(Zdraws, 2, sd),
-        lwr=apply(Zdraws, 2, quantile, probs=.025),
-        upr=apply(Zdraws, 2, quantile, probs=.975)
-        )
-    return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep))
+        sd=apply(ParDraws[,zindex], 2, sd),
+        lwr=apply(ParDraws[,zindex], 2, quantile, probs=.025) + Report$z,
+        upr=apply(ParDraws[,zindex], 2, quantile, probs=.975) + Report$z)
+    pSims <- invlogit(
+      t(t(ParDraws[,zindex]) + Report$z) + c(bhat + ParDraws[,1]))
+    pDF <- tibble(
+        mu=apply(pSims, 2, mean),
+        sd=apply(pSims, 2, sd),
+        lwr=apply(pSims, 2, quantile, probs=.025),
+        upr=apply(pSims, 2, quantile, probs=.975))
+  
+    return(list(obj=Obj, opt=Opt, z=zDF, runtime=runtime, sd=sdrep, pred=pDF))
 }
 
 mesh.old <- mesh
@@ -331,8 +339,13 @@ obsPointPlot <- USDF %>%
     labs(title="Points Observed In US")
 
 obsPointPlot
-plot(mesh, main="Points Observed On Mesh")
-points(obsPoints@coords, col="red", pch=21, cex=.2)
+meshPointPlot <- ggplot() + 
+  gg(mesh, interior=F) +
+  geom_point(aes(long, lat), data=obsDF, color="red", size=.2) +
+  theme_void() +
+  ggtitle("Points Observed On Mesh")
+  
+meshPointPlot
 ```
 
 This approach has been described extensively in prior literature and is integrated into statistical modeling packages such as INLA and Template Model Builder(TMB). We use TMB for this analysis because of its flexibility for creating likelihoods however for this example INLA may be used as well and provides similar results. Unsurprisingly, the model is able to estimate the underlying field well despite observing only a limited number of points in space.
@@ -341,7 +354,7 @@ This approach has been described extensively in prior literature and is integrat
 simPointsOnly <- runModel(obsDF, recompile=F, symboic=F)
 estValues <- mesh2DF(simPointsOnly)
 
-rbind(
+pointPlot <- rbind(
     mutate(estValues, type="Estimated"), 
     mutate(simValues, type="True")) %>%
     filter(obsField) %>%
@@ -399,12 +412,14 @@ obsPointMixDF <- obsDF %>%
 AprojPointMix <- inla.spde.make.A(
     mesh=mesh, 
     loc=as.matrix(select(obsPointMixDF, long, lat)))
+
+pointPlot
 ```
 
 For various reasons, data is not always available to us at the point level and we may have data that comes in the form of a mix of points and areal units. To simulate this we take our original data points that we observe and remove half of them and replace them with representative samples at the county level with the same number of observed samples as we had with the point data. The total number of individuals observed is unchanged however we change the outcome of binomial events so that areal data is representative. Our new data set then comes to us in a mixed format where we observe `r nrow(obsPointMixDF)` data points that are geolocated and `r nrow(obsPolyMixDF)` which come from areal data. The map below shows where we have point and areal data where dark gray cells represent locations of area data. 
 
 ```{r mix, echo=F, message=F, warning=F}
-USDF %>%
+ppDataMixPlot <- USDF %>%
     left_join(obsPolyMixDF) %>%
     mutate(observed=as.numeric(!is.na(denom)) * .2) %>%
     ggplot +
@@ -420,6 +435,8 @@ USDF %>%
         size=.5) +
     guides(alpha=FALSE) +
     ggtitle("Point Polygon Mix Data")
+
+ppDataMixPlot
 ```
 
 Using TMB we may estimate the same underlying random effect field that we did in the first model and evaluate polygon data as part of the data likelihood as outlined in the methods section. The consequence of this is that our underlying latent field that estimated is more pulled to the mean for locations where we have polygon data but the over all field is still well recovered as shown below.
@@ -427,7 +444,7 @@ Using TMB we may estimate the same underlying random effect field that we did in
 ```{r mixmodel, echo=F, message=F, warning=F}
 simPPMix <- runModel(obsPointMixDF, obsPolyMixDF, recompile=F, symboic=F)
 estValuesMix <- mesh2DF(simPPMix)
-rbind(
+mixPlot <- rbind(
     mutate(estValuesMix, type="Estimated with Mix"),
     mutate(estValues, type="Estimated with Points Only"),
     mutate(simValues, type="True")) %>%
@@ -445,6 +462,7 @@ rbind(
     facet_wrap(~type, nrow = 2) +
     ggtitle("Comparison of Model Latent Field Estimates")
 
+mixPlot
 ```
 
 In fact we do not need any point data at all in order to make estimates that of the underlying field because of their correlation. In the next simulation we remove all point data and only use polygon data, however, still estimate the random effects with the SPDE approach. While this may seem trivial, this approach would enable analysts to combine data from overlapping or changing areal data into a single model without having to simplify their data by combining polygons as is common in the literature. The results below show how the model is still able to approximate the underlying field well. 
@@ -472,7 +490,7 @@ obsPolyDF <- simValues %>%
 simPolyOnly <- runModel(NULL, obsPolyDF, recompile=F, symboic=F)
 estValuesPoly <- mesh2DF(simPolyOnly)
 
-rbind(
+polyPlot <- rbind(
     mutate(estValuesMix, type="Estimated with Mix"),
     mutate(estValues, type="Estimated with Points Only"),
     mutate(estValuesPoly, type="Estimated with Polygons Only"),
@@ -502,12 +520,14 @@ sdxm <- rbind(
     unlist %>% 
     round(2) %>%
     unname
+
+polyPlot
 ```
 
 How well the underlying field can be estimated is largely a function of how granular the areal data we have is, however, the benefit of this approach is that the uncertainty of the field when using polygons alone is reflected in the modeling process. Below we see a plot of the latent fields uncertainty which on average increases as we use less points and more polygons and as polygon size increases. For this simulation analysis the points only model, the mix model, and the polygon only model, had an average standard deviation across the latent field of `r sdxm[2]`, `r sdxm[1]`, and `r sdxm[3]` respectively. 
 
 ```{r uncert, echo=F, message=F, warning=F}
-rbind(
+sdPlot <- rbind(
     mutate(estValuesMix, type="Estimated with Mix"),
     mutate(estValues, type="Estimated with Points Only"),
     mutate(estValuesPoly, type="Estimated with Polygons Only")) %>%
@@ -524,32 +544,47 @@ rbind(
         data=USDF) +
     facet_wrap(~type, nrow = 2) +
     labs(title="Latent Field Uncertainty", fill="Standard\nDeviation")
+
+sdPlot
+
+plotList <- list(
+  sdPlot = sdPlot,
+  polyPlot = polyPlot,
+  mixPlot = mixPlot,
+  pointPlot = pointPlot,
+  meshPointPlot = meshPointPlot,
+  obsPointPlot = obsPointPlot,
+  ppDataMixPlot = ppDataMixPlot,
+  fieldPlot = fieldPlot,
+  countyPlot = countyPlot
+)
+
+saveRDS(plotList, file="./simPlots.Rds")
 ```
 
 ```{R diagnos, echo=F, message=F, warning=F, eval=F}
 AprojMesh2Mesh <- inla.spde.make.A(
-        mesh=mesh, 
-        loc=mesh.old$loc)
+        mesh=mesh.old, 
+        loc=mesh$loc)
+
+pProj <- invlogit(beta0 + as.vector(AprojMesh2Mesh %*% x))
 
 bind_rows(lapply(list(simPointsOnly, simPPMix, simPolyOnly), function(x){
     data.frame(
-        x=mesh.old$loc[,1], y=mesh.old$loc[,2], 
-        obs=as.vector(AprojMesh2Mesh %*% x$z$mu),
-        sdx=as.vector(AprojMesh2Mesh %*% x$z$sd)) %>%
-        cbind(mesh.old$loc %>%
+        x=mesh$loc[,1], y=mesh$loc[,2]) %>%
+        cbind(x$pred) %>%
+        cbind(mesh$loc %>%
                   SpatialPoints(US.df@proj4string) %>%
                   over(US.df) %>% 
                   select(GEOID))})) %>%
-    mutate(model=rep(c("Points", "Mix", "Poly"), each=mesh.old$n)) %>%
-    rename(est=obs) %>%
-    mutate(true.Val=rep(x_, 3)) %>%
+    mutate(model=rep(c("Points", "Mix", "Poly"), each=mesh$n)) %>%
+    mutate(true.Val=rep(pProj, 3)) %>%
     filter(!is.na(GEOID)) %>%
     group_by(model) %>%
     summarize(
-        corr=cor(est, true.Val),
-        rmse=mean(sqrt((est-true.Val)^2)),
-        cov=mean(((est-1.96*sdx) <= true.Val) & 
-                     ((est+1.96*sdx) >= true.Val))) %>%
+        corr=cor(mu, true.Val),
+        rmse=mean(sqrt((mu-true.Val)^2)),
+        cov=mean((lwr <= true.Val) & (upr >= true.Val))) %>%
     mutate(model=factor(model, levels=c("Points", "Mix", "Poly"))) %>%
     arrange(model)
 ```
