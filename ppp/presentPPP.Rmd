@@ -128,13 +128,33 @@ Y_k \sim \text{Binomial}(N_k, \hat{p}_k) \\
 \hat{p}_k \approx \frac{\sum_l \hat{p}_l \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}=\frac{\sum_l \text{inv.logit}\big(X_l \boldsymbol{\beta} + \eta(s_l) \big) \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}
 $$
 
+## Fitting the Model (Random Effects Model)
+
+$$
+\mathcal{L}(\boldsymbol{\beta}, \kappa, \sigma_{\eta} ; Y) = \text{Pr}(Y|\boldsymbol{\beta}, \kappa, \sigma_{\eta}) \\
+=\int \text{Pr}(Y|\boldsymbol{\beta}, \eta) \text{Pr}(\eta|\kappa, \sigma_{\eta}) \text{d}\eta
+$$
+Where  
+- $\mathcal{L}(\boldsymbol{\beta}, \kappa, \sigma_{\eta} ; Y)$ is the likelihood  
+- $\text{Pr}(\eta|\kappa, \sigma_{\eta})$ is the hyper-distribution  
+- $\text{Pr}(Y|\boldsymbol{\beta}, \eta) \text{Pr}(\eta|\kappa, \sigma_{\eta})$ is the "penalized likelihood"
+
+## Fitting the Model (Maximum Marginal Likelihood)
+
+- Use the Laplace approximation to approximate the integral
+- Use alternating estimation of fixed effects and random effects
+    - Using Template Model Builder in R
+    - Leverages sparsity of GMRF precision
+
+
 # Simulation
 
 ## Data Generation
 
 - Simulate Matern $\mathcal{GP}$ across field
 - Add a constant $\beta_0 = -1$ to all points in space and take inverse logit
-- Simulate data randomly from the field (N=1200, M=Poisson(100))
+- Simulate data randomly from the field
+    - (Npoints=1200, Mtrails=Poisson(100))
 - Take representative data from random polygons and report outcome
     - Do not disclose exact location only polygons
 - Estimate field using  
