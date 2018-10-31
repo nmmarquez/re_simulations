@@ -29,10 +29,10 @@ output: ioslides_presentation
 - Only use data of one type
 
 ## Problems
-- Redistribution of Data Across Polygon of Source
+- Redistribution of data across polygon of source
     - Susceptible to spurious covariate correlations
     - Over-Confidence in redistributed areas
-- Joint Model Using Areal methods(LCAR) alongside Point methods(SPDE)
+- Joint model using areal methods(LCAR) alongside point methods(SPDE)
     - Does not reflect the data generation process
     - Covariate interpretation susceptible to MAU problem
 - Only use data of one type
@@ -42,8 +42,8 @@ output: ioslides_presentation
 
 ## Estimating Under 5 Mortality in the Dominican Republic
 
-- DR Has Non-Comprehensive Vital Registration System
-- Multiple Surveys Ask respondants about birth histories
+- DR has non-comprehensive vital registration system
+- Multiple surveys ask respondents about birth histories
     - Mix of complete and summary
 - Disputes from sources on national level of mortality
 
@@ -137,9 +137,9 @@ $$
 - Simulate data randomly from the field (N=1200, M=Poisson(100))
 - Take representative data from random polygons and report outcome
     - Do not disclose exact location only polygons
-- Estimate Field Using  
+- Estimate field using  
     - Traditional SPDE
-    - Mix of Points and Polygons using the above approach
+    - Mix of points and polygons using the above approach
     - Polygons using the above approach
 
 ## Probability Field
@@ -177,7 +177,7 @@ plotList$pointPlot
 - Take originally simulated data and associate data with polygons
 - Select half of the polygons and remove the points from the data
 - Simulate data at random from removed polygons equal to points removed
-    - Musr be representative of the polygon that was removed hence resampling
+    - Must be representative of the polygon that was removed hence resampling
 
 ## New Data Structure
 ```{r, pointpolymixdata, echo=F}
@@ -223,8 +223,15 @@ plotList$sdPlot
 
 ## Model Validation Strategies
 
-- Vary Spatial Range and Variation and Test with Arbitrtay Polygons
-- How Do overlapping Polygons respond
+- Vary spatial range and variation and test with arbitrary Polygons
+- How so overlapping polygons respond
 - Direct replication of Utazi et al?
 - Introduction of covariates into model
-    
+    - Spatially Structured
+    - Uniform Random
+
+## Model Application
+- Apply results to DR data
+- Compare against other estimates of DR Child Mortality
+- Extension to other countries?
+- Which Covariates should we include?
