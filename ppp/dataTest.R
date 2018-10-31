@@ -1,6 +1,7 @@
 rm(list=ls())
 library(tidyverse)
 library(sf)
+library(DT)
 
 setwd("~/Documents/re_simulations/ppp/data/")
 
@@ -44,13 +45,13 @@ table(DF$shapefile, useNA="ifany")
 
 # weighted counts
 DF %>%
-    group_by(shapefile) %>%
+    group_by(shapefile, Title) %>%
     summarize(personCount=sum(N))
 
 # temporal breakdown
-DF %>%
+tempDF <- DF %>%
     group_by(Title, year) %>%
-    summarize(personCount=sum(N)) %>%
+    summarize(personPeriodCount=sum(N), Deaths=sum(round(died))) %>%
     as.data.frame
 
 shapeADMIN <- st_read("admin2013_1.shp")
@@ -83,13 +84,13 @@ pointSFDF <- DF %>%
     st_combine
 
 # No :(
-ggplot(pointSFDF) +
+dataGeoPlot <- ggplot(pointSFDF) +
     geom_sf(data=shapeADMINDR) +
     geom_sf(size=.2, alpha=.3) +
     theme_classic() +
     ggtitle("Dominican Republic Gelocated Survey Data")
 
-do.call(rbind, dataCountList) %>%
+dataAreaPlot <- do.call(rbind, dataCountList) %>%
     ggplot(aes(fill=obsCount)) +
     geom_sf() +
     scale_fill_distiller(palette="Spectral") +
@@ -97,10 +98,20 @@ do.call(rbind, dataCountList) %>%
     facet_wrap(~set, nrow=2) +
     ggtitle("Dominican Republic Areal Survey Data")
 
-do.call(rbind, dataCountList[1:2]) %>%
+dataAreaZoomPlot <- do.call(rbind, dataCountList[1:2]) %>%
     ggplot(aes(fill=obsCount)) +
     geom_sf() +
     scale_fill_distiller(palette="Spectral") +
     theme_classic() +
     facet_wrap(~set, nrow=2) +
     ggtitle("Dominican Republic Areal Survey Data")
+
+
+dataList <- list(
+    tempDF=tempDF,
+    dataGeoPlot=dataGeoPlot,
+    dataAreaPlot=dataAreaPlot,
+    dataAreaZoomPlot=dataAreaZoomPlot
+)
+
+saveRDS(dataList, "../dataList.Rds")

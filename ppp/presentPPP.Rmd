@@ -38,6 +38,49 @@ output: ioslides_presentation
 - Only use data of one type
     - Ignores information
 
+# Data Example
+
+## Estimating Under 5 Mortality in the Dominican Republic
+
+- DR Has Non-Comprehensive Vital Registration System
+- Multiple Surveys Ask respondants about birth histories
+    - Mix of complete and summary
+- Disputes from sources on national level of mortality
+
+## DR Sources
+![](./DRDataResize.png "DR Data Sources")
+
+## MICS, DHS, and other Survey Data
+
+```{r, examineData, echo=F}
+library(DT)
+dataList <- readRDS("dataList.Rds")
+datatable(
+  dataList$tempDF, height=300, options=list(lengthMenu=list(3)))
+```
+
+## Geolocated Data
+```{r, examineData1, echo=F}
+dataList$dataGeoPlot
+```
+
+## Areal Data
+```{r, examineData2, echo=F}
+dataList$dataAreaPlot
+```
+
+## Areal Data
+```{r, examineData3, echo=F}
+dataList$dataAreaZoomPlot
+```
+
+## DR Data Specificity
+- Data comes from a mix of geolocated, admin 0, 1, and 2 data
+    - Also includes a mix of areal non administrative data
+- What information are we leaving out by ignoring data
+- Data quality is an issue (see VR)!!
+- How do we reconcile these different data sources when estimating mortality
+
 # Proposal: Modification of Spatial Model Likelihood for Areal Response Data
 
 ## Traditional Continuous Spatial Model
@@ -96,7 +139,7 @@ $$
     - Do not disclose exact location only polygons
 - Estimate Field Using  
     - Traditional SPDE
-    - Mix of Points and Polygons ussing the above approach
+    - Mix of Points and Polygons using the above approach
     - Polygons using the above approach
 
 ## Probability Field
@@ -175,3 +218,13 @@ plotList$sdPlot
 |Points |     0.9339| 0.0256|   0.9773|
 |Mix    |     0.8668| 0.0345|   0.9502|
 |Poly   |     0.7704| 0.0475|   0.9297|
+
+# Next Steps
+
+## Model Validation Strategies
+
+- Vary Spatial Range and Variation and Test with Arbitrtay Polygons
+- How Do overlapping Polygons respond
+- Direct replication of Utazi et al?
+- Introduction of covariates into model
+    
