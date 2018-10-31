@@ -88,6 +88,7 @@ We begin by testing the validity of our methodology by comparing results from a 
 
 ```{r loads, message=FALSE, warning=FALSE, echo=FALSE}
 rm(list=ls())
+library(knitr)
 library(ggplot2)
 library(arm)
 library(dplyr)
@@ -586,5 +587,6 @@ bind_rows(lapply(list(simPointsOnly, simPPMix, simPolyOnly), function(x){
         rmse=mean(sqrt((mu-true.Val)^2)),
         cov=mean((lwr <= true.Val) & (upr >= true.Val))) %>%
     mutate(model=factor(model, levels=c("Points", "Mix", "Poly"))) %>%
-    arrange(model)
+    arrange(model) %>%
+    kable(format="markdown", digits=4)
 ```

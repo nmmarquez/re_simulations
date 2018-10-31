@@ -85,13 +85,93 @@ Y_k \sim \text{Binomial}(N_k, \hat{p}_k) \\
 \hat{p}_k \approx \frac{\sum_l \hat{p}_l \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}=\frac{\sum_l \text{inv.logit}\big(X_l \boldsymbol{\beta} + \eta(s_l) \big) \Delta_l}{\langle \langle \mathcal{A}_k \rangle \rangle}
 $$
 
----
+# Simulation
 
-```{r, cars, fig.cap="A scatterplot.", echo=FALSE}
-plot(cars)
+## Data Generation
+
+- Simulate Matern $\mathcal{GP}$ across field
+- Add a constant $\beta_0 = -1$ to all points in space and take inverse logit
+- Simulate data randomly from the field (N=1200, M=Poisson(100))
+- Take representative data from random polygons and report outcome
+    - Do not disclose exact location only polygons
+- Estimate Field Using  
+    - Traditional SPDE
+    - Mix of Points and Polygons ussing the above approach
+    - Polygons using the above approach
+
+## Probability Field
+```{r, pfield, echo=FALSE}
+plotList <- readRDS("./simPlots.Rds")
+plotList$fieldPlot
 ```
 
-## Going to sleep
+## County Field
+```{r, pcounty, echo=FALSE}
+plotList$countyPlot
+```
 
-- Get in bed
-- Count sheep
+# Traditional SPDE
+
+## Traditional Model Observed Points on Field
+
+```{r, fieldObs, echo=FALSE}
+plotList$obsPointPlot
+```
+
+## Traditional Model Observed Points on Mesh
+```{r, meshObs, echo=FALSE}
+plotList$meshPointPlot
+```
+
+## Estimated Latent Field Vs True
+```{r, estSPDE, echo=FALSE}
+plotList$pointPlot
+```
+
+# Approximation with Point and Polygon Mix
+
+## Simulation Paradigm
+- Take originally simulated data and associate data with polygons
+- Select half of the polygons and remove the points from the data
+- Simulate data at random from removed polygons equal to points removed
+    - Musr be representative of the polygon that was removed hence resampling
+
+## New Data Structure
+```{r, pointpolymixdata, echo=F}
+plotList$ppDataMixPlot
+```
+
+## Projection Code
+
+```
+vector<Type> projPoint = AprojPoint * z;
+vector<Type> projLatObs = AprojObs * z + beta0;
+vector<Type> projPObs = exp(projLatObs) / (Type(1.) + exp(projLatObs));
+SparseMatrix<Type> RAprojPoly = AprojPoly.transpose();
+vector<Type> projPoly = RAprojPoly * projPObs;
+```
+
+## Mix Model Results
+```{r, mixrez, echo=F}
+plotList$mixPlot
+```
+
+# Polygon Only Model
+
+## Results
+```{r, poly, echo=F}
+plotList$polyPlot
+```
+
+## Uncertainty in Latent Field
+```{r, uncert, echo=F}
+plotList$sdPlot
+```
+
+## Model Diagnostics
+
+|Model  |Correlation|   RMSE| Coverage|
+|:------|----------:|------:|--------:|
+|Points |     0.9339| 0.0256|   0.9773|
+|Mix    |     0.8668| 0.0345|   0.9502|
+|Poly   |     0.7704| 0.0475|   0.9297|
