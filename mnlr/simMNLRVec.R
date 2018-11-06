@@ -2,6 +2,7 @@ set.seed(123)
 # library to run multinomial regression
 library(nnet)
 library(MASS)
+library(mvtnorm)
 rm(list=ls())
 
 N <- 10000 # number of observations
@@ -36,6 +37,26 @@ table(apply(y_obs, 1, function(x) which(x == max(x))[1]))
 # make sure all the values are close to 1
 print(all.equal(rowSums(y_prob), rep(1, N)))
 print(all.equal(rowSums(y_obs), rep(1, N)))
+
+# function for predicting
+ratio2Pred <- function(X, model, draws=NULL){
+    G <- length(model$par) / ncol(X) + 1
+    if(!is.null(draws)){
+        betas_ <- rmvnorm(draws, model$par, solve(model$hessian))
+        y_prob <- array(0, dim=c(nrow(X), G, draws))
+        for(d in 1:draws){
+            m <- list(par=betas_[d,])
+            y_prob[,,d] <- ratio2Pred(X, m) 
+        }
+    }
+    else{
+        betas_ <- matrix(model$par, ncol=G-1, nrow=ncol(X))
+        ratio_ref <- exp(X %*% betas_)
+        p1 <- apply(ratio_ref, 1, function(x) 1 / (1 + sum(x)))
+        y_prob <- cbind(p1, ratio_ref * p1)
+    }
+    return(y_prob)
+}
 
 # get the estimates
 optimMultiVec <- function(params, X, Y){
@@ -72,4 +93,6 @@ testFit <- fitMultiVec(covs, y_obs)
 testFit$convergence # make sure we get 0 exit status
 # visually inspect betas not bad!
 betas
-matrix(testFit$par, nrow=M+1, ncol = G-1)
+
+# we can also get draws of probability predictions
+dim(ratio2Pred(covs, testFit, draws = 1000))
