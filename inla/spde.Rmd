@@ -1,0 +1,558 @@
+---
+title: "Explicit Link Between GMRF & GF"
+author: "Neal Marquez"
+date: "March 10, 2018"
+---
+    
+```{r libs, message=FALSE, warning=FALSE}
+rm(list=ls())
+library(dplyr)
+library(mvtnorm)
+library(Matrix)
+library(parallel)
+library(ar.matrix)
+library(ggplot2)
+library(INLA)
+```
+
+In the field of spatial statistics we often want to estimate the degree of auto-correlation that exists in some phenomena or in the residuals of a particular linear model. Let us assume that we have some process $S(x)$ which operates over a $\mathbb{R}^2$ spatial field, such that $x_i \in \mathbb{R}^2 for i \in \{ 1, \dots n \}$. We then have some value $y_i$ which geographically correspond to values of $x_i$. If we define distance between two points i and j such that $d = ||x_i - x_j||$ we can then declare a function $k$ which defines the covariance between two points which is only dependent on the euclidean distance between those two points. This covariance function is the key element that we will need in order to construct a Gaussian Process. The other is a mean function which for now we will only consider a constant mean function of zero. Our gaussian process is the defined by $\mathcal{GP}(0, k)$. For a finite number of points, n, the covariance function $k$ produces a matrix $\sigma$ which is n by n and the stochastic process is then analogous to the Multivariate Normal Distribution such that $\text{MVN}(\boldsymbol{0}, \Sigma)$. In order for $\Sigma$ to be a valid covariance function we need to ensure that it is 1) symmetric and 2) positive semi definite. If we use the definition above then for any two points $x_i$ and $x_j$ the covariance only depends on the euclidean distance then the matrix $\Sigma$ must be symmetric by definition. In order to prove that a matrix is stationary, that is $z^T \Sigma z$ is positive for every construction of non zero set z we only have to show that all its eigenvalues are positive. On the other hand in order to prove that $k$ always produces a matrix $\Sigma$ for a finite set of points that is semi positive definite, then we need to use Bochner’s theorem which states that a complex function k on $\mathbb{R}^D$ is the covariance function of a stationary mean square continuous complex valued random process on $\mathbb{R}^D$ if and only if it can be represented as  
+
+$$
+k(d) = \int \text{exp}(2 \pi i s d) ~d \mu (s)
+$$
+
+## The Matern Covariance Function
+In their paper "An explicit link between Gaussian fields and Gaussian Markov random fields: The SPDE approach", Lindgren, Rue, and Lindstrom demonstrate how the gaussian field, a two dimensional gaussian process that is continuously indexed, can be estimated by a gaussian markov random field, a discretely indexed process whose construction is sparse in nature, most indexes are conditionally independent from each other, if the gaussian process has a matern covariance function. The benefits of this process is that if we are fitting a model that that has the form $\text{MVN}(\boldsymbol{0}, \Sigma)$ the operation of order is $\mathcal{O}(n^3)$. In contrast if we have a sparse precision matrix, $\Sigma^{-1}$, the time to calculate the likelihood has an operation of order of $\mathcal{O}(n^{\frac{3}{2}})$. The matern covariance function is defined as stated below
+
+$$
+k_\nu(d) = \frac{2^{1-\nu}}{\Gamma (\nu)} \Big( \sqrt{2 \nu} \frac{d}{\kappa}\Big)
+K_\nu \Big( \sqrt{2 \nu} \frac{d}{\kappa}\Big)
+$$
+    
+    Where $\Gamma$ is the Gamma function and $K_\nu$ is the modified Bessel function of the second kind.
+
+Several authors, such as Bertil Matérn and Rasmussen and Williams, have shown that the Matern covariance function is indeed positive semi definite and we can show by simulation that the eigenvalues that are generated from various simulated random points on a field where $\kappa$ varies between 1 and 0 and $\nu$ is fixed to 2.
+
+```{R simulatePSD}
+maternCor <- function(distX, kappa_, nu_=1){
+    t3 <- besselK(kappa_ * distX, nu_)
+    t2 <- (kappa_ * distX)^nu_
+    t1 <- (2)^(1-nu_)/gamma(nu_)
+    return(t1 * t2 * t3)
+}
+
+checkMaternEigen <- function(n=100){
+    points <- sapply(1:2, function(x) runif(n, 0, 100))
+    distMat <- sapply(1:n, function(i) sapply(1:n, function(j){
+        c(dist(rbind(points[i,], points[j,])))})) %>%
+        maternCor(kappa_=runif(1), nu=2)
+    diag(distMat) <- 1
+    all(eigen(distMat)$values >= 0)
+}
+
+# Run 500 simulations of 100 simulated points with
+# random values of kappa for each simulation and check if the
+# corresponding Covariance matrix that is created generates
+# all positive eigenvalues. nu is locked at 1
+
+set.seed(123)
+mclapply(rep(100, 5), checkMaternEigen, mc.cores=6) %>%
+    unlist %>%
+    all
+```
+
+## Main Finding 1
+
+Lindgren, Rue, and Lindstrom and have two main findings from their study. The fist finding is that on an evenly spaced two dimensional grid tending towards an infinite amount of points a gaussian process with a matern covariance function can be represented as a Gaussian Markov random field. The authors show that when the following statements are true
+
+$$
+E[x_{ij} | x_{-ij}] = a^{-1} (x_{i-1,j} + x_{i+1,j} + x_{i,j-1} + x_{i,j+1}) \\ \text{Var}(x_{ij} | x_{-ij}) = a^{-1}
+$$
+    
+The corresponding covariance of any two points in the field can be expressed as
+
+$$
+\text{Cov}(x_{i,j},x_{i',j'}) \approx \frac{a}{2 \pi}
+K_0(||x_{i,j} - x_{i',j'}||\sqrt{a-4})
+$$
+    
+And the precision is thus
+
+$$
+\begin{bmatrix}
+-1 & \\
+a & -1 \\
+\end{bmatrix}
+$$
+    
+This result is the natural interpretation of the Matern covariance when $\nu$ approaches zero and $\kappa = a - 4$. Because of the way $\alpha$ is constructed, $\alpha = \nu + \frac{D}{2}$ where $D$ is the number of dimensions of the field, in our case 2. The approximate precisions that accompany Gaussian processes with values of $\nu = 1, 2$ are shown as convolutions of the $\nu = 0$ case.
+
+
+$$
+\nu=1;\begin{bmatrix}
+1   &    & \\
+-2a & 2  & \\
+4+a^2 & -2a & 1
+\end{bmatrix} \\
+$$
+$$
+\nu=2;\begin{bmatrix}
+-1   &    &    &  \\
+3a   & -3 &    &  \\
+-3(a^2 + 3) & 6a & -3 & \\
+a(a^2 + 12) & -3(a^2 + 3) & 3a & -1
+\end{bmatrix} \\
+$$
+    
+Below we show that the approximations of a Matern Covariance Gaussian Process by use of the specified precision matrix for values of $\nu = \{ 1, 2 \}$ are indeed good fits by visual inspection of covariance and precision matrices created explicitly by the Matern Covariance function and the SPDE approximation.
+
+```{R maternApproximation}
+buildQv1 <- function(gridDim, kappa=.3, verbose=F, sparse=F){
+    gridN <- gridDim^2
+    matrixPos <- expand.grid(x=1:gridDim, y=1:gridDim) %>%
+        mutate(Qpos=1:gridN)
+    gridQ <- matrix(0, nrow=gridN, ncol=gridN)
+    a_ <- kappa^2 + 4
+    
+    for(i in 1:gridN){
+        if(verbose){
+            print(i)
+        }
+        diagPos <- subset(matrixPos, Qpos==i)
+        pos_ <- c(diagPos$x, diagPos$y)
+        gridQ[i, i] <- 4 + a_^2
+        for(j in list(c(1,0), c(0,1), c(-1,0), c(0,-1))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- -2 * a_
+                gridQ[Qpos2, i] <- -2 * a_
+            }
+        }
+        for(j in list(c(1,1), c(-1,1), c(-1,-1), c(1,-1))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- 2
+                gridQ[Qpos2, i] <- 2
+            }
+        }
+        for(j in list(c(2,0), c(0,2), c(-2,0), c(0,-2))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- 1
+                gridQ[Qpos2, i] <- 1
+            }
+        }
+    }
+    if(sparse){
+        gridQ <- Matrix(gridQ, sparse=TRUE)
+    }
+    return(gridQ)
+}
+
+buildQv2 <- function(gridDim, kappa=.3, verbose=FALSE, sparse=FALSE){
+    gridN <- gridDim^2
+    matrixPos <- expand.grid(x=1:gridDim, y=1:gridDim) %>%
+        mutate(Qpos=1:gridN)
+    gridQ <- matrix(0, nrow=gridN, ncol=gridN)
+    a_ <- kappa^2 + 4
+    
+    for(i in 1:gridN){
+        if(verbose){
+            print(i)
+        }
+        diagPos <- subset(matrixPos, Qpos==i)
+        pos_ <- c(diagPos$x, diagPos$y)
+        gridQ[i, i] <- a_ * (12 + a_^2)
+        for(j in list(c(1,0), c(0,1), c(-1,0), c(0,-1))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- -3 * (3 + a_^2)
+                gridQ[Qpos2, i] <- -3 * (3 + a_^2)
+            }
+        }
+        for(j in list(c(1,1), c(-1,1), c(-1,-1), c(1,-1))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- 6 * a_
+                gridQ[Qpos2, i] <- 6 * a_
+            }
+        }
+        for(j in list(c(2,0), c(0,2), c(-2,0), c(0,-2))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- 3 * a_
+                gridQ[Qpos2, i] <- 3 * a_
+            }
+        }
+        for(j in list(c(3,0), c(0,3), c(-3,0), c(0,-3))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- -1
+                gridQ[Qpos2, i] <- -1
+            }
+        }
+        for(j in list(c(2,1), c(1,2), c(2,-1), c(-1,2),
+                      c(-2,1), c(1,-2), c(-2,-1), c(-1,-2))){
+            adj_pos <- pos_ + j
+            if(all(adj_pos > 0) & all(adj_pos <= gridN)){
+                Qpos2 <- subset(matrixPos, x==adj_pos[1] & y==adj_pos[2])$Qpos
+                gridQ[i, Qpos2] <- -3
+                gridQ[Qpos2, i] <- -3
+            }
+        }
+    }
+    if(sparse){
+        gridQ <- Matrix(gridQ, sparse=TRUE)
+    }
+    return(gridQ)
+}
+
+createDistGrid <- function(gridDim){
+    gridN <- gridDim^2
+    matrixPos <- expand.grid(x=1:gridDim, y=1:gridDim) %>%
+        mutate(Qpos=1:gridN)
+    gridSigma <- matrix(0, nrow=gridN, ncol=gridN)
+    for(i in 1:gridN){
+        for(j in i:gridN){
+            p1 <- subset(matrixPos, Qpos == i)
+            p2 <- subset(matrixPos, Qpos == j)
+            dist_ <- c(dist(rbind(c(p1$x, p1$y), c(p2$x, p2$y))))
+            gridSigma[i,j] <- dist_
+            gridSigma[j,i] <- dist_
+        }
+    }
+    return(gridSigma)
+}
+
+buildSigma <- function(gridDim, kappa=.3, nu_=1){
+    gridSigma <- createDistGrid(gridDim)
+    gridSigma <- maternCor(gridSigma, kappa, nu_=nu_)
+    diag(gridSigma) <- rep(1, gridDim^2)
+    return(gridSigma)
+}
+
+image(buildSigma(10, kappa=.9),
+      main="Exact Matern Covariance(nu=1)")
+image(solve(buildQv1(10, kappa=.9)),
+      main="GMRF approximation of Matern Covariance(nu=1)")
+image(solve(buildSigma(10, kappa=.9)),
+      main="Exact Matern Precision(nu=1)")
+image(buildQv1(10, kappa=.9),
+      main="GMRF approximation of Matern Precision(nu=1)")
+image(solve(buildSigma(10, nu_=2, kappa=.3)),
+      main="Exact Matern Precision(nu=2)")
+image(buildQv2(10, kappa=.3),
+      main="GMRF approximation of Matern Precision(nu=2)")
+```
+
+In practice when we attempt to estimate the parameters of a spatial field, we should fix the parameter $\nu$ and estimate $\kappa$ as the two parameters are highly correlated in determining the range of spatial autocorrelation. The range at which spatial autcorrelation reaches a value of .1 is defined as $\rho$ and it is constructed as follows $\rho = k^-1 \sqrt{8 \nu }$. In order to demonstrate this we will simulate four random fields using the above specifications for the precision matrix and taking its cholesky decomposition in order to simulate values as specified in Rue(2009). We will set $\nu = {1,2}$ and $\kappa={.3, \frac{.3}{\sqrt{2}}}$ for four unique combinations. These four simulations will thus give us spatial ranges corresponding to
+
+$$
+\boldsymbol{\rho} = \begin{bmatrix}
+\frac{20 \sqrt{2}}{3} & \frac{20 \sqrt{4}}{3} \\
+\frac{20 \sqrt{4}}{3} & \frac{40 \sqrt{2}}{3} \\
+\end{bmatrix}
+$$
+    
+Where $\nu = 2$ and $\kappa=.3$ gives us the same spatial range value $\rho$ as $\nu = 1$ and $\kappa=\frac{.3}{\sqrt{2}}$
+    
+```{R simSpatRanges}
+simQ <- function(Q){
+    cholL <- chol(Q)
+    z <- sapply(1, function(x) rnorm(nrow(Q)))
+    x <- solve(t(cholL), z)@x
+    return(x)
+}
+
+m <- 60
+Q11 <- buildQv1(m, kappa=.1, sparse=T)
+Q12 <- buildQv2(m, kappa=.1, sparse=T)
+Q21 <- buildQv1(m, kappa=.1/sqrt(2), sparse=T)
+Q22 <- buildQv2(m, kappa=.1/sqrt(2), sparse=T)
+
+set.seed(123)
+expand.grid(x=1:m, y=1:m) %>%
+    mutate(val_=simQ(Q11)) %>%
+    ggplot(aes(x=x, y=y, color=val_)) +
+    scale_color_distiller(palette = "Spectral") +
+    geom_point(size=2.5) +
+    labs(x="", y="", title="Points Simulated with nu=1 kappa=.1") +
+    theme_void()
+
+expand.grid(x=1:m, y=1:m) %>%
+    mutate(val_=simQ(Q12)) %>%
+    ggplot(aes(x=x, y=y, color=val_)) +
+    scale_color_distiller(palette = "Spectral") +
+    geom_point(size=2.5) +
+    labs(x="", y="", title="Points Simulated with nu=2 kappa=.1") +
+    theme_void()
+
+expand.grid(x=1:m, y=1:m) %>%
+    mutate(val_=simQ(Q21)) %>%
+    ggplot(aes(x=x, y=y, color=val_)) +
+    scale_color_distiller(palette = "Spectral") +
+    geom_point(size=2.5) +
+    labs(x="", y="", title="Points Simulated with nu=1 kappa=.1/2^.5") +
+    theme_void()
+
+expand.grid(x=1:m, y=1:m) %>%
+    mutate(val_=simQ(Q22)) %>%
+    ggplot(aes(x=x, y=y, color=val_)) +
+    scale_color_distiller(palette = "Spectral") +
+    geom_point(size=2.5) +
+    labs(x="", y="", title="Points Simulated with nu=2 kappa=.1/2^.5") +
+    theme_void()
+```
+
+## Main Finding 2
+
+The second main finding of the paper states that in addition to being able to approximate a matern gaussian process on regular two dimensional lattice field, we can also approximate a matern covariance gaussian process on an irregular field using triangulation methods such as Delaunay Triangulation. For any triangulation the stochastic weak formulation of the SPDE is defined as
+
+$$
+[f,g] = \int f(u)g(u) du
+$$
+    
+Where the integral is over the are of the triangulation. The stochastic solution to this eqautaion is found by
+
+$$
+    \Big{\{} \langle \phi_j, (\kappa^2 - \Delta)^{\alpha / 2} \rangle, j=1, \dots , m \Big{\}} \overset{d}{=}
+\Big{\{} \langle \phi_j , \mathcal{W} \rangle, j, \dots, m \Big{\}}
+$$
+    
+Where $\overset{d}{=}$ indicates equally distributed and $\{ \phi_j(u), j=1, \dots , m \}$ are a finite set of appropriate test functions. The finite element representation of the solution can then be viewed as
+
+$$
+x(u) = \sum_{k=1}^{n} \psi_k (u) w_k
+$$
+    
+Where $\psi_k$ are piecewise linear basis functions and $w_k$ are gaussian weights. The benefit of this approach is that we can define any point on the field as a function of its relationship to their points which it shares a border with and the point on the vertex corresponds to a weight of 1 when the full field is observed. Furthermore points that lie within the triangulation are weighted sum of the vertices that define the triangulation that a point lies within. The solutions for $\alpha =1$ and $\alpha =2$ are $\phi_k = (kappa^2 - \Delta)^{1/2} \psi_k$ and $\phi_k = \psi_k$ respectively. Furthermore, solutions for $\alpha$ greater than 2 can be formulated as products of the formulations of $\alpha=1$ and $\alpha=2$
+    
+$$
+C_{ij} = \langle \psi_i, \psi_j \rangle\\
+G_{ij} = \langle \nabla \psi_i , \nabla \psi_j \rangle \\
+K_{\kappa^2} = \kappa^2 C_{ij} + G_{ij}
+$$
+    
+$$
+Q_{1,\kappa^2} = K_{\kappa^2} \\
+Q_{2,\kappa^2} = K_{\kappa^2} C^{-1} K_{\kappa^2} \\
+Q_{\alpha,\kappa^2} = K_{\kappa^2} C^{-1} Q_{\alpha -2, \kappa^2}C^{-1} K_{\kappa^2} \text{, for } \alpha = 3, 4, \dots
+$$
+    
+It should be noted that $C^{-1}$ is dense, however it can be approximated by $\widetilde{C}^{-1}$ where $\widetilde{C}$ is a diagnoal matrix with diagnol elements $\widetilde{C}_{ii} = \langle \psi_i, 1 \rangle$
+    
+To show that this estimation is a good approximation we show heat maps of covariance and precision matrices created by the Matern Covariance function and the SPDE approximation.
+
+```{R irregMats}
+set.seed(123)
+n <- 100
+kappa_ <- .3
+points <- sapply(1:2, function(x) runif(n, 0, 100))
+distMat <- sapply(1:n, function(i) sapply(1:n, function(j){
+    c(dist(rbind(points[i,], points[j,])))})) %>%
+    maternCor(kappa_=kappa_, nu=1)
+diag(distMat) <- 1
+
+mesh <-  points %>% inla.mesh.create
+fmesh <- inla.fmesher.smorg(mesh$loc, mesh$graph$tv, fem = 2,
+                            output = list("c0", "c1", "g1", "g2"))
+M0 <- fmesh$c0
+M1 <- fmesh$g1
+M2 <- fmesh$g2
+Q <- as.matrix((kappa_^4)*M0 + 2*(kappa_^2) * M1 + M2)
+
+image(distMat,
+      main="Exact Matern Covariance(nu=1)")
+image(solve(Q)[1:100, 1:100],
+      main="GMRF approximation of Matern Covariance(nu=1)")
+image(solve(distMat),
+      main="Exact Matern Precision(nu=1)")
+image(Q[1:100, 1:100],
+      main="GMRF approximation of Matern Precision(nu=1)")
+```
+
+We can also verify that the distance correlation behavior, for both the Matern Covariance and the approximation resemble each other.
+
+```{R corrExamine}
+invQ <- solve(Q)
+pointsDF <- data.frame(posi=vector("integer"), posj=vector("integer")) %>%
+    mutate(MaternCor=vector("numeric"), spdeCor=vector("numeric"))
+
+pointsDF <- bind_rows(lapply(1:n, function(i) bind_rows(lapply(i:n, function(j){
+    dist_ <- c(dist(rbind(points[i,], points[j,])))
+    mCor <- maternCor(dist_, kappa_=kappa_, nu_ = 1)
+    mCor <- ifelse(is.na(mCor), 1, mCor)
+    pCor <- invQ[i,j] / sqrt(invQ[i,i] * invQ[i,i])
+    data.frame(posi=i, posj=j, maternCor=mCor, spdeCor=pCor, dist=dist_)
+}))))
+
+pointsDF %>%
+    mutate(intv=cut_interval(dist, length=1)) %>%
+    group_by(intv) %>%
+    summarize(mCor=mean(maternCor), pCor=mean(spdeCor)) %>%
+    head(n=20) %>%
+    mutate(Distance=seq(0, 19, 1)) %>%
+    ggplot(data=.) +
+    geom_line(aes(x=Distance, y=mCor)) +
+    geom_point(aes(x=Distance, y=pCor)) +
+    labs(x="Distance", y="Correlation",
+         title="Matern(Line) and SPDE(Points) Correlation") +
+    theme_classic()
+
+```
+
+With the precision matrix Q generated by the SPDE approximation we can then use cholesky decompositions and simulate values for the irregular points as well as use interpolation to estimate the continuous surface.
+
+```{R simIrreg}
+M <- 60
+
+pointsDF <- data.frame(x=runif(m^2,0, m), y=runif(m^2,0, m))
+
+buildIrregQ <- function(pointsDF, kappa_=.3, nu_=2, sparse=TRUE){
+    mesh <-  pointsDF %>%
+        as.matrix %>%
+        inla.mesh.create
+    fmesh <- inla.fmesher.smorg(mesh$loc, mesh$graph$tv, fem = 2,
+                                output = list("c0", "c1", "g1", "g2"))
+    M0 <- fmesh$c0
+    M1 <- fmesh$g1
+    M2 <- fmesh$g2
+    Q <- as.matrix((kappa_^4)*M0 + 2*(kappa_^2) * M1 + M2)
+    if(sparse){
+        Q <- Matrix(Q, sparse=TRUE)
+    }
+    return(Q)
+}
+
+irregQ <- buildIrregQ(pointsDF, kappa_ = .1, sparse=T)
+simX <- c(sim.AR(1, irregQ))
+
+pointsDF %>%
+    mutate(val_=simX[1:(m^2)]) %>%
+    ggplot(aes(x=x, y=y, color=val_)) +
+    scale_color_distiller(palette = "Spectral") +
+    geom_point(size=2) +
+    labs(x="", y="", title="Points Simulated with v=1") +
+    theme_void()
+
+# use linear interpolation to project onto the full space
+proj <- pointsDF %>%
+    as.matrix %>%
+    inla.mesh.create %>%
+    inla.mesh.projector(dims=c(500,500))
+
+pointsDF %>%
+    as.matrix %>%
+    inla.mesh.create %>%
+    plot
+
+data.frame(x=proj$lattice$loc[,1],
+           y=proj$lattice$loc[,2]) %>%
+    mutate(z=c(inla.mesh.project(proj, field=simX))) %>%
+    ggplot(aes(x, y, z=z)) + geom_raster(aes(fill = z)) + theme_bw() +
+    lims(y=c(0,m), x=c(0,m)) +
+    scale_fill_distiller(palette = "Spectral") +
+    theme_void() + labs(title="Triangulated Interpolation")
+```
+
+## Estimating Simulated Data and the Leukemia Data
+
+First in order to show that we can use the SPDE GMRF to estimate the parameter of a Matern Gaussian Process we will simulate a spatial process using the  Matern covariance function on a set of points in irregular space using known values of $\kappa$ and $\nu$ and attempt to recover those parameters using the SPDE approximation. We will repeat this process 100 times and show the difference between the estimated values of $\kappa$.
+
+```{R hpEst}
+
+n <- 500
+set.seed(123)
+pts <- cbind(s1=sample(1:n/n-0.5/n)^2, s2=sample(1:n/n-0.5/n)^2)
+dmat <- dist(pts)
+sigma2e <- 0.03
+sigma2u <- 1
+kappa <- 7
+nu <- 1
+
+mcor <- as.matrix(2^(1-nu)*(kappa*dmat)^nu *
+                      besselK(dmat*kappa,nu)/gamma(nu))
+diag(mcor) <- 1;   mcov <- sigma2e*diag(n) + sigma2u*mcor
+mesh <- inla.mesh.create(pts)
+A <- inla.spde.make.A(mesh=mesh, loc=pts)
+spde <- inla.spde2.matern(mesh)
+
+runSimulation <- function(i){
+    L <- chol(mcov)
+    y1 <- drop(crossprod(L, rnorm(n)))
+    stk.e <- inla.stack(tag='est', data=list(y=y1), A=list(A, 1),
+                        effects=list(s=1:spde$n.spde, data.frame(b0=rep(1, n))))
+    f_ <- y ~ 0 + b0 + f(s, model=spde) # remove the built in intercept
+    res <- inla(f_, data=inla.stack.data(stk.e),
+                control.predictor=list(A =inla.stack.A(stk.e)),
+                num.threads=1)
+    exp(res$summary.hyperpar$mean[3])
+}
+
+data.frame(res=kappa -
+               unlist(mclapply(1:40, runSimulation, mc.cores=6))) %>%
+    ggplot(aes(x=res)) + geom_density() +
+    theme_classic() +
+    labs(x="Residual", y="Density",
+         title="Simulated Kappa Estimate Residuals")
+```
+
+Median Estimates of $\kappa$ are centered around the true value of $\kappa$ even when the number of observed points on the field are relatively small. In addition to estimating the field we can also estimate the effects of covariates have on an outcome in the presence of some geospatial latent field that follows a matern covariance on the gaussian field. In order to demonstrate this I will recreate the analysis that was run in the paper using a survival analysis for leukemia patients with an underlying latent field and point level covariates such as white blood cell count, age, and sex of individuals.
+
+```{R}
+pts <- Leuk %>%
+    select(xcoord, ycoord) %>%
+    as.matrix
+mesh <- inla.mesh.create(pts)
+A <- inla.spde.make.A(mesh=mesh, loc=pts)
+spde <- inla.spde2.matern(mesh)
+stk.e <- inla.stack(
+    tag='est',
+    data=list(time=Leuk$time, cens=Leuk$cens),
+    A=list(A, 1),
+    effects=list(
+        spatial=1:spde$n.spde,
+        data.frame(b0=1, select(Leuk, age, sex, wbc, tpi))))
+
+f_ <- inla.surv(time, cens) ~ 1 +
+    sex + age + wbc + tpi +
+    f(spatial, model=spde)
+res <- inla(f_, data=inla.stack.data(stk.e),
+            control.predictor=list(A=inla.stack.A(stk.e)),
+            family="weibullsurv", verbose = T)
+
+r0 <- diff(range(bbox(nwEngland)[1,]))/diff(range(bbox(nwEngland)[2,]))
+proj <- inla.mesh.projector(mesh, xlim=bbox(nwEngland)[1,],
+                            ylim=bbox(nwEngland)[2,],
+                            dims=c(300*r0, 300))
+z <- res$summary.ran$spatial$mean
+
+nwEnglandDF <- fortify(nwEngland)
+
+latDF <- data.frame(
+    x=proj$lattice$loc[,1],
+    y=proj$lattice$loc[,2], 4) %>%
+    mutate(z=c(inla.mesh.project(proj, field=z)))
+
+latSPDF <- SpatialPointsDataFrame(select(latDF, x, y), latDF)
+latSPDF <- latSPDF[!is.na(over(latSPDF, nwEngland)),]
+
+ggplot(nwEnglandDF, aes(x=long, y=lat, group=group)) +
+    geom_raster(aes(x=x, y=y, fill=z, group=NA), data=latSPDF@data) +
+    geom_polygon(fill=NA) +
+    geom_path(colour="grey50") +
+    theme_void() +
+    scale_fill_distiller(palette = "Spectral", name="") +
+    labs(title="Latent Hazard Field From Leukemia Model")
+```
+
+## Conclusion
+
+I have covered the main findings of the paper "An explicit link between Gaussian fields and Gaussian Markov random fields: The SPDE approach"by  Lindgren, Rue, and Lindstrom. Gaussian Fields can be approximated by use of a SPDE solution Gaussian Markov Random Field.  I showed that simulations that were created by way of using a Matern Covariance Gaussian Process could consistently have their governing parameter $\kappa$ estimated using the SPDE.  In addition these fields can be estimated simultaneous in linear models by way of bayesian hierarchical models and the latent field can be recreated by using GMRF approximations.
