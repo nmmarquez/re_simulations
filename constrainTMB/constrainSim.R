@@ -28,7 +28,7 @@ apply(sim2, 2, sd)
 
 # try with just regular iid 
 M <- 50
-N <- 100000
+N <- 1000
 Q <- diag(seq(1, 5, length.out=M)^-1)
 Sigma <- diag(seq(1, 5, length.out=M))
 sim1 <- sim.AR(N, Q)
@@ -66,3 +66,4 @@ data.frame(sim=apply(sim1, 2, sd), simstar=apply(sim2, 2, sd)) %>%
     geom_density(alpha=.2) +
     geom_vline(xintercept=sigma.iid, linetype=3) +
     theme_classic()
+
