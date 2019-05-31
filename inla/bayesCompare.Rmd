@@ -1,0 +1,122 @@
+
+## Data
+$$
+N = 10 \\
+X_{n} \in \{0, 1\} \\
+\sum_n^N X_n = 7
+$$
+
+### Bayes Approach 
+$$
+P(\theta) \sim \text{Beta}(2, 2) \\
+P(\theta | X) \sim \text{Beta}(2+7, 2+3)
+$$
+
+```{r}
+rm(list=ls())
+set.seed(123) 
+library(arm)
+library(tidyverse)
+
+
+a=1.5
+b=1.5
+X=7
+N=10
+
+tibble(x=seq(0, 1, by=.01)) %>%
+    mutate(Prior=dbeta(x, a, b), Posterior=dbeta(x, X+a, b + N - X)) %>%
+    gather("Statistic", "value", -x) %>%
+    ggplot(aes(x=x, y=value, color=Statistic, group=Statistic)) +
+    geom_line() +
+    theme_classic()
+```
+
+## Likelihood maxization
+$$
+\mathcal{L}(\theta=z|X)
+$$
+
+```{r}
+evalLik <- function(theta, pseudoprior=F, X_=X, N_=N, a_=a, b_=b){
+    theta <- arm::invlogit(theta)
+    nll <- -dbinom(X_, N_, theta, log = T)
+    if(pseudoprior){
+        nll <- nll - dbeta(theta, a_, b_, log = T)
+    }
+    nll
+}
+
+```
+
+```{r}
+fitLogit <- optim(
+    par=0, fn=evalLik, method="Brent", lower=-10, upper=10, hessian=T)
+fitLogitP <- optim(
+    par=0, fn=evalLik, method="Brent", lower=-10, upper=10, hessian=T,
+    pseudoprior=T)
+
+inc <- .001
+
+DF <- tibble(x=seq(inc, 1-inc, by=inc)) %>%
+    mutate(MLE=dnorm(arm::logit(x), fitLogit$par, fitLogit$hessian^-.5)) %>%
+    mutate(Psuedo=dnorm(arm::logit(x), fitLogitP$par,fitLogitP$hessian^-.5)) %>%
+    # Apply Normalizing constant after transformation
+    mutate(MLE = (inc^-1)*MLE/sum(MLE)) %>%
+    mutate(Psuedo = (inc^-1)*Psuedo/sum(Psuedo)) %>%
+    mutate(Posterior=dbeta(x, X+a, b + N - X)) 
+
+DF %>%
+    gather("Model", "value", -x) %>%
+    ggplot(aes(x=x, y=value, color=Model, group=Model)) +
+    geom_line() +
+    theme_classic()
+```
+
+```{r}
+a2 <- X+a
+b2 <- b + N - X
+tibble(
+    Model = c("Posterior", "MLE", "Psuedo"),
+    Median = c(
+        (a2-(1/3)) / (a2+b2-(2/3)), 
+        arm::invlogit(fitLogit$par),
+        arm::invlogit(fitLogitP$par)),
+    Mean = c(
+        a2 / (a2 + b2),
+        mean(arm::invlogit(rnorm(10000, fitLogit$par, fitLogit$par^-.5))),
+        mean(arm::invlogit(rnorm(10000, fitLogitP$par, fitLogitP$par^-.5)))
+    ),
+    Var = c(
+         (a2 * b2)/((a2 + b2)^2 *(a2 + b2 + 1)),
+        var(arm::invlogit(rnorm(10000, fitLogit$par, fitLogit$par^-.5))),
+        var(arm::invlogit(rnorm(10000, fitLogitP$par, fitLogitP$par^-.5)))
+    )) %>%
+    mutate(SD = sqrt(Var)) %>%
+    arrange(Model)
+```
+
+```{r}
+M <- 100000
+DF2 <- tibble(MLE=invlogit(rnorm(M, fitLogit$par, fitLogit$hessian^-.5))) %>%
+    mutate(Psuedo=invlogit(rnorm(M, fitLogitP$par, fitLogitP$hessian^-.5))) %>%
+    mutate(Posterior=rbeta(M, X+a, b + N - X)) 
+
+DF2 %>%
+    gather("Statistic", "value") %>%
+    ggplot(aes(x=value, color=Statistic, group=Statistic)) +
+    geom_density() +
+    theme_classic()
+```
+
+```{r}
+DF2 %>%
+    gather("Model", "value") %>%
+    group_by(Model) %>%
+    summarize(
+        Median = median(value),
+        Mean = mean(value),
+        Var = var(value),
+        SD = sd(value)
+    )
+```
