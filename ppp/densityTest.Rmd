@@ -1,0 +1,153 @@
+# Binomial Variants
+
+We are going to cover some different binomial variants that describe the different ways
+that we can describe a binomial sample in the context of a geospatial model. Lets say that we have a geospatial surface as shown below which describes the porbability risk surface of some event occuring. For this example we use a 1x1 unit grid to act as the area of concern.
+
+```{R, warning=F, message=F, echo=F}
+rm(list=ls())
+library(tidyverse)
+library(PointPolygon)
+library(PearsonDS)
+library(TTR)
+set.seed(12345)
+
+unitSim <- simField(
+    N = 500,
+    offset = c(0.1, 0.2),
+    max.edge = c(0.05,0.2),
+    beta0 = -2)
+
+ggField(unitSim) +
+    labs(fill="Probability", title="Probability Risk Surface")
+```
+
+The map shows the continuous risk surface of an event occurring, up to a certain level of precision. In actuality this surface is a 500x500 grid with a total of 250000 ,$n$ , unique probabilities. You could imagine that individuals exist on this surface and depending on their location $s$ the probability of an event occurring, as modeled by a binomial likelihood, for that individual is described by their risk at that location $\eta(s)$.
+
+If we observe individuals from this area, depending on the information that we have about the way in which they were sampled, the accompanying distribution will be different. For the first example let us assume that $X$ represents an individual whose outcome can either be 1 or 0. We do not know which location this individual came from thus their $p_s$ is unknown. For this example we will treat the probability of coming from any given location as equal. We can write this probability as a mixture distribution as follows.
+
+$$
+X \sim n^{-1} \sum_{s \in \mathcal{A}} p_s^x(1-p_s)^{1-x}
+$$
+
+Below we calculate the first two moments of this mixture distribution. The derivations build off of work by Marrond and Wand (1992) which gives the general form for calculating the first two moments of mixture distributions where a mixture of one-dimensional distributions with weights $n^{-1}$, means $\mu_s$ and variances $\sigma^2$ from the same family is given.
+
+$$
+E[X] = \mu = n^{-1} \sum_{s \in \mathcal{A}} \mu_s = n^{-1} \sum_{s \in \mathcal{A}} p_s = \bar{\boldsymbol{p}} \\
+\begin{align}
+\text{Var}[X] &= -\mu^2 + n^{-1}\sum_{s \in \mathcal{A}}\mu_s^2 + \sigma_s^2 \\
+&= -\bar{\boldsymbol{p}}^2 + n^{-1} \sum_{s \in \mathcal{A}} p_s^2 + p_s-p_s^2 \\
+&= -\bar{\boldsymbol{p}}^2 + n^{-1} \sum_{s \in \mathcal{A}} p_s \\
+&= \bar{\boldsymbol{p}}-\bar{\boldsymbol{p}}^2 \\
+&= \bar{\boldsymbol{p}}(1 - \bar{\boldsymbol{p}})
+\end{align}
+$$
+
+Further moments can be derived as well, and we can see that the random variable $X$ matches the distribution of a random variable $Y$ which follows a Bernoulli distribution, without a mixture, with a value $p^\star = \bar{\boldsymbol{p}}$.
+
+We can also show this matching of moments by simulation. Leveraging the property of the law of large numbers, we can calculate the cumulative value of the first two moments as we increase the sample size for two random variables. The Series `Fix` represents samples drawn from the distribution for $Y$, a single value of $p$ which is the mean of the field above, while `Mix` represents samples from the mixture of Bernoulli random variables for $X$ where there are a number of probabilities $p_s$ equal to the number of probabilities on the grid above $n$ each with an equal probability of selection, $n^{-1}$. After a sufficient number of samples we can see that the first two moments for both random samples converge on the expected values.  
+
+```{R}
+M <- 100000
+
+mu1 <- mean(unitSim$spdf$theta)
+
+exampleDF <- tibble(
+    sample = c(
+        rbinom(M, size = 1, prob = mean(unitSim$spdf$theta)),
+        rbinom(M, size = 1, prob = sample(unitSim$spdf$theta, M, replace=TRUE))
+    ),
+    type = rep(c("Fix", "Mix"), each=M),
+    size = rep(1:M, 2)) %>%
+    group_by(type) %>%
+    mutate(Mu=cummean(sample), Var=runSD(sample, n=1, cumulative=T)^2) %>%
+    ungroup
+
+exampleDF %>%
+    select(-sample) %>%
+    gather("Statistic", "Value", Mu, Var) %>%
+    mutate(TrueVal=ifelse(Statistic == "Mu", mu1, mu1*(1-mu1))) %>%
+    ggplot(aes(x=size, y=Value, group=type, color=type)) +
+    geom_hline(aes(yintercept=TrueVal), linetype=2) +
+    geom_line() +
+    facet_wrap(~Statistic) +
+    theme_classic() +
+    labs(x="Sample Size", y="Value", title="Cumulative Statistic Calculation")
+```
+
+While this may seem trivial a convienient property of this is that the sum of either $m$ $X$ or $Y$ random vriables can both be described by a binomial distribution, $\text{Binomial}(m,\bar{\boldsymbol{p}})$. This means that if we observe $m$ individuals at random from the field above with equal probability of being from a particular location we may describe that process using a binomial distribution in the same way that we would when we had bernoulli observations with the same $p$. In other words the sum of mixture bernoullis with the same probability vector $\boldsymbol{p}$ may be modeled as teh binomial described. We can make the argument analytically by showing that $X$ and $Y$ have the same moments and thus the sum of $m$ observations of either must have the same distribution at least in the first two moments as iid means and variances are additive. Again we can show this by simulation as shown below.
+
+```{R}
+M <- 10000
+m <- 20
+mu1 <- mean(unitSim$spdf$theta) * m
+var1 <- mean(unitSim$spdf$theta)*(1-mean(unitSim$spdf$theta))*m
+
+exampleDF2 <- tibble(
+    sample = c(
+        rbinom(M, size = m, prob = mean(unitSim$spdf$theta)),
+        sapply(1:M, function(i){
+            sum(rbinom(m, 1, prob=sample(unitSim$spdf$theta, M, replace=TRUE)))
+        })
+    ),
+    type = rep(c("Fix", "Mix"), each=M),
+    size = rep(1:M, 2)) %>%
+    group_by(type) %>%
+    mutate(Mu=cummean(sample), Var=runSD(sample, n=1, cumulative=T)^2) %>%
+    ungroup
+
+exampleDF2 %>%
+    select(-sample) %>%
+    gather("Statistic", "Value", Mu, Var) %>%
+    mutate(TrueVal=ifelse(Statistic == "Mu", mu1, var1)) %>%
+    ggplot(aes(x=size, y=Value, group=type, color=type)) +
+    geom_hline(aes(yintercept=TrueVal), linetype=2) +
+    geom_line() +
+    facet_wrap(~Statistic) +
+    theme_classic() +
+    labs(x="Sample Size", y="Value", 
+         title="Cumulative Statistic Calculation (Sum)")
+```
+
+
+```{R test, echo=F, eval=F}
+set.seed(1234)
+Np <- 40
+p <- rbeta(Np, 1.2, 6)
+pProb <- rep(1/length(p), length(p))
+M <- 100000
+trials <- 20
+
+k.1<-sum(trials/length(p)*p)
+k.2<-sum(trials/length(p)*p*(1-p))
+k.3<-sum(trials/length(p)*p*(1-p)*(1-2*p))
+k.4<-sum(trials/length(p)*p*(1-p)*(1-6*p*(1-p)))
+
+beta.1 <- (k.3^2)/(k.2^3)
+beta.2 <- k.4/(k.2^2)
+kurt <- beta.2 + 3
+
+moments <- c(mean = k.1, variance = k.2, skewness = beta.1, kurtosis = kurt)
+
+simDensity <- table(sapply(1:M, function(j){
+    sum(rbinom(trials, 1, sample(p, trials, replace=TRUE, prob=pProb)))}))
+
+simDensityFull <- unname(simDensity[as.character(0:trials)])
+simDensityFull[is.na(simDensityFull)] <- 0
+
+simDensityProb <- as.vector(simDensityFull / M)
+
+distDF <- tibble(
+    x=0:trials,
+    approx=dbinom(x, trials, sum(p*pProb)),
+    mixture=rowSums(sapply(p, function(px){
+        dbinom(0:trials, trials, px)}) / length(p)),
+    conv=diff(c(0, ppearson(0:trials+0.5, moments = moments))),
+    true=simDensityProb)
+
+distDF %>%
+    gather(key="Type", value="density", -x) %>%
+    ggplot(aes(x=x, y=density, group=Type, color=Type)) +
+    geom_point() +
+    theme_classic()
+```
+

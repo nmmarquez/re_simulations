@@ -1,0 +1,241 @@
+We are going to walk through the simulation and estimation of some survival data using a simple weibull distribution. The weibull distribution is a two parameter distribution that supports on the scale $x \in \{ 0, + \infty \}$. The two parameters of the distribution are the shape $k$ and scale $\lambda$ parameters. The full pdf and cdf can be found on the [wikipedia page](https://en.wikipedia.org/wiki/Weibull_distribution). Some examples of the weibull distribution are shown below. Notice that as we chnage the Shape function to be below 1 the hazard function decreases over time while whne it is above 1 it increases over time. (Recall that functionally the hazard function states the a conditional density, given that the event in question has not yet occurred prior to time x)
+
+## Relationship of Disitributions
+
+$$
+\begin{align}
+f(x) &= \text{PDF} \\
+F(x) &= \text{CDF} = \int_{-\infty}^{x} f(x) dx \\
+S(x) &= 1 - F(x)  = \text{exp}(-\int_{-\infty}^t h(t) dt) \\
+h(x) &= \frac{f(x)}{S(x)}
+\end{align}
+$$
+
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(survival)
+library(knitr)
+
+x <- seq(0.05, 2.5, length.out=1000)
+l_ <- 1.
+
+bind_rows(lapply(c(.5, .8, 1, 1.2, 1.5), function(sig){
+    tibble(x=seq(0.05, 2.5, length.out=1000), Shape=as.character(sig)) %>%
+        mutate(PDF=dweibull(x, sig, scale=l_)) %>%
+        mutate(CDF=pweibull(x, sig, scale=l_)) %>%
+        mutate(Surv=1-CDF, Hazard=PDF/Surv) %>%
+        mutate(Hazard=sig/l_ * (x/l_)^(sig-1)) %>%
+        gather("Measure", "Value", -x, -Shape)})) %>%
+    ggplot(aes(x=x, y=Value, color=Shape)) +
+    geom_line() +
+    facet_wrap(~Measure, scales = "free_y") +
+    theme_classic() +
+    labs(x="", y="") +
+    ggtitle(paste0("Distribution Functions (Scale = ", l_, ")"))
+
+```
+
+We can see how the survival model estimates these parameters using a simulation approach.
+
+```{r}
+N <- 10000
+set.seed(123)
+shape <- 1.5
+
+# Simulate some weibull data
+simDF <- tibble(x = rweibull(N, shape=shape)) %>%
+    # censor data with a bias towards higher values more likely to be censored
+    mutate(censorT = runif(n(), 0, max(x))) %>%
+    # an event was observed if true time was less than censor time
+    mutate(event = x <= censorT) %>%
+    mutate(censor = !event) %>%
+    # the time observed is the min value between censored and true time
+    mutate(Y=pmin(x, censorT))
+
+simDF %>%
+    ggplot(aes(x=x, fill=censor)) +
+    geom_density(alpha=.5) +
+    theme_classic() +
+    labs(x="", y="") +
+    ggtitle("Distribution of True Event Times For Non-/Censored Data")
+
+fittedModel <- summary(survreg(Surv(Y, event)~1 , data=simDF, dist="weibull"))
+tibble(
+    params = c("shape", "scale"),
+    truevals = c(shape, 1),
+    # Note that we got to change the parameterization from the model
+    estimated = c((fittedModel$scale)^-1, exp(fittedModel$coefficients))) %>%
+    kable()
+```
+
+Introduction of covariates into this model is trivial and can be done in the scale parameter as shown below.
+
+```{r}
+betas <- c(-.3, .2)
+X <- cbind(rep(1, N), rnorm(N))
+shape <- .7
+
+# Simulate some weibull data
+simDF <- tibble(x = rweibull(N, shape=shape, scale=exp(c(X %*% betas)))) %>%
+    # censor data with a bias towards higher values more likely to be censored
+    mutate(censorT = runif(n(), 0, max(x))) %>%
+    # an event was observed if true time was less than censor time
+    mutate(event = x <= censorT) %>%
+    mutate(censor = !event) %>%
+    # the time observed is the min value between censored and true time
+    mutate(Y=pmin(x, censorT)) %>%
+    # Add covariate to the data frame
+    mutate(x1 = X[,2])
+
+# fit the model using canned package
+fittedModel <- summary(survreg(Surv(Y, event)~x1 , data=simDF, dist="weibull"))
+
+tibble(
+    params = c("shape", "beta0", "beta1"),
+    truevals = c(shape, betas),
+    # Note that we got to change the parameterization from the model
+    estimated = c((fittedModel$scale)^-1, fittedModel$coefficients)) %>%
+    kable()
+```
+
+If we want to estimate this by hand we need to use the knowledge that we have of the Survival function $S(x)$ and the probability density function $f(x)$. We also Define the CDF, $F(x)$, and the hazard function, $h(x)$.
+
+$$
+\begin{align}
+f(x) &= \frac{k}{\lambda}(\frac{x}{\lambda})^{k-1}\text{exp}(-(\frac{x}{\lambda})^k) \\
+F(x) &= 1 - \text{exp}(-(\frac{x}{\lambda})^k) \\
+S(x) &= 1 - F(x) =\text{exp}(-(\frac{x}{\lambda})^k) \\
+h(x) &= \lambda^{-k} k x^{k-1}
+\end{align}
+$$
+
+The likelihood and log likelihood for a set of observed failure data $\boldsymbol{x}$ and censored data $\boldsymbol{c}$ can be written.
+
+$$
+\begin{align}
+\mathcal{L}(\lambda, k | \boldsymbol{x}, \boldsymbol{c}) &= 
+    \prod_{i=1}^{n} f(x_i)\prod_{i=1}^{m} S(c_i) \\
+\ell(\lambda, k | \boldsymbol{x}, \boldsymbol{c}) &=
+    n\text{log}k - nk\text{log}\lambda + (k-1) \sum_{i=1}^n
+    \text{log}(x_i) - \frac{\sum_{i=1}^n x_i^k + \sum_{i=1}^m c_i^k}{\lambda^k}
+\end{align}
+$$
+
+Note that we can substitute coefficients into the lambda parameterization. Below we show how the estimates of MLE lead to an equivelent answer as the survival package.  
+
+```{r}
+evalLike <- function(pars, data=simDF){
+    X <- rbind(rep(1, nrow(data)), data$x1)
+    data$scale <- exp(c(pars[2:3] %*% X))
+    shape <- exp(pars[1])
+    dataX <- subset(data, !censor)
+    dataC <- subset(data, censor)
+    #nll <- -sum(dweibull(dataX$Y, shape, scale=dataX$scale, log=TRUE))
+    #nll <- nll - sum(log(1- pweibull(dataC$Y, shape, scale=dataC$scale)))
+    nll <- -sum(log(shape/dataX$scale*(dataX$Y/dataX$scale)^(shape-1)))
+    nll <- nll - sum(log(1- pweibull(data$Y, shape, scale=data$scale)))
+    nll
+}
+
+parFit <- nlminb(c(0, 0, 0), evalLike)
+
+tibble(
+    params = c("shape", "beta0", "beta1"),
+    truevals = c(shape, betas),
+    # Note that we got to change the parameterization from the model
+    estimated = c(exp(parFit$par[1]), parFit$par[2:3])) %>%
+    kable(caption="Custom Maximum Likelihood Estimation Fit")
+```
+
+## Competing Hazards
+
+For this example let us say that rather than having one cause of failure/event we have multiple causes of failure. In our motivating case this is type of first migration being either legal or undocumented but the theory is extendable to a large number of causes. In this case our hazard function is as follows.
+
+$$
+h(x|\boldsymbol{\theta}) = \sum_{j=1}^{s} h_j(x|\theta_j)
+$$
+
+In this notation we explictely write out that each hazard $j$ from the set of all hazards $s$ has a set of specific parameters $\theta_j$ that govern the shape of failure over time. In addition, the overall hazard $h(x|\boldsymbol{\theta})$ is the sum of each of the other hazards. This notation affords us an easy translation to how we interpret censored data. Since we define a censored data point as an individual who was not observed for any of the causes $j$ the survivor function is only dependent on the sum of hazards.
+
+$$
+S(x|\boldsymbol{\theta}) = \text{exp}(-\Lambda(x|\boldsymbol{\theta})) \\
+\Lambda(x|\boldsymbol{\theta}) = \int_0^x h(u|\boldsymbol{\theta}) du
+$$
+
+Including cause specfifc failures in our likelihood is now a trivial matter of rewriting the likelihood function. Let us again treat censored data as $c$ and each cause specific event as $x_i^j$ as individual $i$ observed experiencing the $j$ cause. The likelihood may then be written as.
+
+$$
+\begin{align}
+\mathcal{L}(\boldsymbol{\theta}| \boldsymbol{x}, \boldsymbol{c}) &= 
+    \prod_{j=1}^{s}\prod_{i=1}^{n} f(x_i^j)
+    \prod_{i=1}^{m}S(c_i|\boldsymbol{\theta}) \\
+&= \prod_{j=1}^{s}\prod_{i=1}^{n} h(x_i^j|\theta_j) S(x_i^j|\boldsymbol{\theta})
+    \prod_{i=1}^{m}S(c_i|\boldsymbol{\theta}) \\
+\end{align}
+$$
+
+We may instead chooseto rewrite this likelihood describing each observation time as $x_i$ where individual $i$ has an observed failure/event indicator of $d_i$ and the cause attributed to the event or cause is written as $j[i]$ the likelihood is then.
+
+$$
+\mathcal{L}(\boldsymbol{\theta}| \boldsymbol{x}) =
+   \prod_{i=1}^{n} h_{j[i]}(x_i|\theta_{j[i]})^{d_i}
+   S(x_i|\boldsymbol{\theta})
+$$
+
+## Simulating Multiple Hazards  
+
+```{r}
+N <- 10000
+set.seed(123)
+shape <- 1.
+
+# Simulate some weibull data
+simDF <- tibble(scale_=sample(c(1.5, .7), size=N, replace=T)) %>%
+    mutate(x = rweibull(N, shape=shape, scale=scale_)) %>%
+    # censor data with a bias towards higher values more likely to be censored
+    mutate(censorT = runif(n(), 0, max(x))) %>%
+    # an event was observed if true time was less than censor time
+    mutate(event = x <= censorT) %>%
+    mutate(censor = !event) %>%
+    # the time observed is the min value between censored and true time
+    mutate(Y=pmin(x, censorT)) %>%
+    mutate(eType=(scale_ == 1.5)+1)
+
+simDF %>%
+    ggplot(aes(x=x, fill=censor)) +
+    geom_density(alpha=.5) +
+    theme_classic() +
+    labs(x="", y="") +
+    ggtitle("Distribution of True Event Times For Non-/Censored Data") +
+    facet_wrap(~scale_)
+
+evalCompeteLike <- function(pars, data=simDF){
+    shape_ <- exp(pars[1])
+    scales_ <- exp(pars[2:3])
+    # logS <- function(x){
+    #     Lx <- -log(1-pweibull(x, shape_, scales_[1]))-
+    #         log(1-pweibull(x, shape_, scales_[2]))
+    #     -Lx
+    # }
+    # sDF <- subset(data, event)
+    # hx <- log(shape_/scales_[sDF$eType]*(sDF$x/scales_[sDF$eType])^(shape_-1))
+    # -(sum(hx) + sum(logS(data$x)))
+    dList <- list(
+        e1DF = mutate(data, censor=ifelse(eType == 1, censor, TRUE)),
+        e2DF = mutate(data, censor=ifelse(eType != 1, censor, TRUE)))
+    nll <- 0
+    for(i in 1:length(dList)){
+        d <- dList[[i]]
+        dataX <- subset(d, !censor)
+        dataC <- subset(d, censor)
+        nll <- nll-sum(log(shape_/scales_[i]*(dataX$Y/scales_[i])^(shape_-1)))
+        nll <- nll - sum(log(1- pweibull(d$Y, shape_, scale=scales_[i])))
+    }
+    nll
+}
+
+parFit <- nlminb(c(0, 0, 0), evalCompeteLike)
+parFit <- nlminb(c(0, log(.7), log(1.5)), evalCompeteLike)
+```

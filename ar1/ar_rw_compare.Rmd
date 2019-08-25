@@ -1,0 +1,67 @@
+---
+title: "AR2 RW2 Cov Prec"
+output: html_document
+---
+
+## AR1
+
+Recall that for an RW1 process with $\sigma = 1$ that we have the following
+precision matrix.
+
+```{r}
+rm(list=ls())
+library(ar.matrix)
+N <- 7
+Q.AR1(N, 1, 1)
+```
+
+The corresponding AR1 Matric with $\phi=.9$ is then 
+
+```{r}
+Q.AR1(N, 1, .9)
+```
+
+The advantage of an AR matric is that we can invert it to find the covar of the process
+
+```{r}
+Matrix::solve(Q.AR1(N, 1, .9))
+```
+
+These values are obtained by the following formula
+
+$$
+\Sigma_{i,j} = \frac{\sigma^2\rho^{|i-j|}}{1 - \rho^2} 
+$$
+
+## AR2
+
+Here lets let $\rho_1=.7$ and $\rho_2=.25$. the the marginal variance is
+
+```{r}
+rho1 <- .5
+rho2 <- .4999
+sigma_ <- 1
+
+gammas <- rep(((1-rho2)/(1+rho2))*(sigma_^2 / ((1-rho2)^2-rho1^2)), N)
+gammas <- rep(((1-rho2)*sigma_^2)/((1+rho2)*(1-rho1-rho2)*(1+rho1-rho2)), N)
+
+for(i in 2:N){
+    if(i == 2){
+        gammas[i] = (rho1 * gammas[1])/(1-rho2) 
+    }
+    else{
+        gammas[i] = rho1 * gammas[i-1] + rho2 * gammas[i-2]
+    }
+}
+
+Sigma2 <- sapply(1:N, function(i) sapply(1:N, function(j){
+    gammas[abs(i-j)+1]}))
+
+Sigma2
+```
+
+What happens when we invert this?
+
+```{r}
+Matrix::solve(Sigma2)
+```
