@@ -43,7 +43,7 @@ mean((t(betas) - summary(mnlr)$coefficients)**2)
 
 # run the model using TMB
 library(TMB)
-setwd("~/Documents/tmp/mnlr/")
+setwd("~/Documents/re_simulations/mnlr/")
 
 # compile the cpp
 model_name <- "mnlr"
