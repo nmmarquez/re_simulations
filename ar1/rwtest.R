@@ -32,7 +32,7 @@ rw2Q <- function(M, sparse=T){
     for (i in 3:(M-2)){
         Q[i, (i-2):(i+2)] <- c(1, -4, 6, -4, 1)
     }
-    Q[M-1, (M-3):M] <- c(-2, 5, -4, 1)
+    Q[M-1, (M-3):M] <- c(1, -4, 5, -2)
     Q[M, (M-2):M] <- c(1, -2, 1)
     if(sparse)
         Q <- Matrix::Matrix(Q, sparse = TRUE)
@@ -59,7 +59,7 @@ plot(y)
 plot(density(testDifferences(y, F)))
 quantile(testDifferences(y, F), probs = c(.025, .975))
 
-#x <- simulateRW2(400, 1.5)
+x <- simulateRW2(400, 2)
 x <- as.vector(arima.sim(list(ar=c(.499, .499)), n=400, function(z) rnorm(z, sd=.5)))
 plot(x)
 plot(density(testDifferences(x)))
@@ -74,7 +74,7 @@ densRW2 <- function(x, sigma_=1, log=T){
     kappa_ <- 1/(sigma_^2)
     N <- length(x)
     Q <- rw2Q(N) * kappa_
-    log(kappa_^((N-2)/2)) + (-.5 * ((t(x) %*% Q %*% x)[1,1]))
+    ((N-2)/2) * log(kappa_) + (-.5 * ((t(x) %*% Q %*% x)[1,1]))
 }
 
 testDF <- tibble(test = seq(.75, 2.5, by=.05)) %>%

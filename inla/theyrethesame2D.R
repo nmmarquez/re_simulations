@@ -16,10 +16,10 @@ plot_mesh_sim <- function(x, proj){
         lims(y=c(0,1), x=c(0,1)) + scale_fill_gradientn(colors=heat.colors(8))
 }
 
-n <- 500 # number of observations on the grid
-m <- 12 # number of time points
+n <- 200 # number of observations on the grid
+m <- 4 # number of time points
 loc <- matrix(runif(n*2), n, 2) # simulate observed points
-mesh <- inla.mesh.create(loc, refine=list(max.edge=0.05)) # create mesh
+mesh <- inla.mesh.create(loc, refine=list(max.edge=0.5)) # create mesh
 jpeg("~/Documents/re_simulations/inla/mesh.jpg")
 par(mfrow=c(1,1))
 plot(mesh)
@@ -112,7 +112,7 @@ A <- inla.spde.make.A(mesh=mesh,
 
 sdat <- inla.stack(tag='stdata', data=list(y=dat$y), 
                    A=list(A,1),  effects=list(iset, w=dat$w)) 
-h.spec <- list(theta=list(prior='pccor1', param=c(0, 0.9)))
+h.spec <- list(theta=list(prior='pc.cor1', param=c(0, 0.9)))
 formulae <- y ~ 0 + w + 
     f(i, model=spde, group=i.group, 
       control.group=list(model='ar1', hyper=h.spec)) 
