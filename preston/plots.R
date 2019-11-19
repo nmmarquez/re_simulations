@@ -4,9 +4,11 @@ library(gapminder)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(sf)
+
 # extract world data
 world <- ne_countries(scale = "medium", returnclass = "sf")
 
+# create a point graph of log gdp and life exp
 gapminder %>% 
     ggplot(aes(gdpPercap, lifeExp, color=year)) +
     geom_point() +
@@ -15,6 +17,7 @@ gapminder %>%
     scale_x_log10() +
     labs(x="GDP Per Capita", y="Life Expectancy", color="Year")
 
+# only look at 2007 and draw a best fit line
 gapminder %>% 
     filter(year == 2007) %>% 
     ggplot(aes(gdpPercap, lifeExp)) +
@@ -24,15 +27,20 @@ gapminder %>%
     labs(x="GDP Per Capita", y="Life Expectancy", color="Continent") +
     geom_smooth(method="lm", se=F, color = "black", linetype = 3)
 
+# extract the slope from a series of independent linear regressions over time
 slopeDF <- t(sapply(sort(unique(gapminder$year)), function(y){
+    # run regression from a specific year
     lm(lifeExp ~ log(gdpPercap), data = filter(gapminder, year == y)) %>%
+        # run summary and extract the coefficients
         summary() %>%
         {c(.$coefficients[2,], rsq=.$r.squared)}})) %>%
     as_tibble() %>%
+    # calculate upper and lower bounds
     mutate(lwr = Estimate - 1.98 * `Std. Error`) %>%
     mutate(upr = Estimate + 1.98 * `Std. Error`) %>%
     mutate(year = sort(unique(gapminder$year)))
 
+# plot the slope with confidence intervals
 slopeDF %>%
     ggplot(aes(year, Estimate, ymin = lwr, ymax = upr, color = year)) +
     geom_point() +
@@ -42,6 +50,8 @@ slopeDF %>%
     labs(x = "Year", y = "Slope of Preston Curve") +
     ggtitle("Declining Effect of Wealth on Life Expectancy")
 
+# group by year and show the difference between the variance of 
+# gdp and life exp over time
 gapminder %>%
     group_by(year) %>%
     summarize(
@@ -55,6 +65,7 @@ gapminder %>%
     labs(x = "Year", y = "Satndard Deviation") +
     ggtitle("Changes in Spread of Preston Curve Components")
 
+
 gapminder %>%
     filter(year == 2007 | year == 1957) %>%
     arrange(country, year) %>%
@@ -63,6 +74,7 @@ gapminder %>%
     {lm(deltaLEX ~ deltalGDP, data = .)} %>%
     summary()
 
+# create a datset that is the difference between start and end of time in data
 deltaDF <- gapminder %>%
     filter(year == 2007 | year == 1957) %>%
     arrange(country, year) %>%
